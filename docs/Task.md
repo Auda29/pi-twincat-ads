@@ -60,7 +60,7 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - Kontext-Hook auf kompakte Snapshot-Symbole begrenzen.
 - Session-Ende für vollständiges Cleanup von Notifications, Handles und ADS-Verbindung nutzen.
 
-### 9. Skill- und Entwicklerdokumentation erstellen `[Open]`
+### 9. Skill- und Entwicklerdokumentation erstellen `[Done]`
 
 - `skills/twincat-ads/SKILL.md` mit Tool-Nutzung, Symbolpfaden und Write-Sicherheitsregeln anlegen.
 - README um Installation, Konfiguration, ADS-Voraussetzungen und verfügbare Tools erweitern.
