@@ -66,7 +66,7 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - README um Installation, Konfiguration, ADS-Voraussetzungen und verfügbare Tools erweitern.
 - Router-Modus und Direkt-Modus verständlich dokumentieren.
 
-### 10. Tests und Smoke-Checks vervollständigen `[Open]`
+### 10. Tests und Smoke-Checks vervollständigen `[Done]`
 
 - Unit- und Integrationstests für Config, ADS-Service, Tool-Verhalten und Hooks anlegen.
 - Mock-basierten End-to-End-Test mit `ads-client` ergänzen.
