@@ -64,6 +64,8 @@ export {
   type PlcStateResult,
   type PlcSymbolSummary,
   type PlcWatchRegistration,
+  type PlcWriteMode,
+  type PlcWriteModeResult,
 } from "./ads/index.js";
 
 export {

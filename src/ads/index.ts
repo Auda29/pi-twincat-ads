@@ -16,7 +16,10 @@ import {
   type WriteValueResult,
 } from "ads-client";
 
-import type { ExtensionRuntimeConfig } from "../config.js";
+import {
+  isWriteAllowed,
+  type ExtensionRuntimeConfig,
+} from "../config.js";
 
 export interface AdsServiceDependencies {
   readonly logger?: Pick<Console, "debug" | "error" | "info" | "warn">;
@@ -27,6 +30,8 @@ export type AdsConnectionState =
   | "connecting"
   | "connected"
   | "degraded";
+
+export type PlcWriteMode = "read-only" | "enabled";
 
 export interface PlcSymbolSummary {
   readonly name: string;
@@ -49,6 +54,12 @@ export interface PlcReadResult<T = unknown> {
 export interface PlcStateResult {
   readonly connection: AdsClientConnection;
   readonly adsState: AdsConnectionState;
+  readonly writeMode: PlcWriteMode;
+  readonly writePolicy: {
+    readonly configReadOnly: boolean;
+    readonly runtimeWriteEnabled: boolean;
+    readonly allowlistCount: number;
+  };
   readonly plcRuntimeState: AdsState;
   readonly tcSystemState: AdsState;
   readonly tcSystemExtendedState: AdsTcSystemExtendedState;
@@ -61,6 +72,14 @@ export interface PlcWatchRegistration {
   readonly cycleTimeMs: number;
   readonly mode: "on-change" | "cyclic";
   unsubscribe(): Promise<void>;
+}
+
+export interface PlcWriteModeResult {
+  readonly writeMode: PlcWriteMode;
+  readonly runtimeWriteEnabled: boolean;
+  readonly configReadOnly: boolean;
+  readonly writesAllowed: boolean;
+  readonly message: string;
 }
 
 function toAdsClientSettings(
@@ -125,6 +144,7 @@ export class AdsService {
   #lastError: Error | undefined;
   #connectPromise: Promise<AdsClientConnection> | undefined;
   #symbolsLoaded = false;
+  #writeMode: PlcWriteMode = "read-only";
 
   constructor(
     private readonly config: ExtensionRuntimeConfig,
@@ -148,6 +168,10 @@ export class AdsService {
 
   get hasActiveConnection(): boolean {
     return this.#client.connection.connected;
+  }
+
+  get writeMode(): PlcWriteMode {
+    return this.#writeMode;
   }
 
   async connect(): Promise<AdsClientConnection> {
@@ -301,7 +325,42 @@ export class AdsService {
     value: T,
   ): Promise<WriteValueResult<T>> {
     await this.connect();
+    this.#assertWriteAllowed(name);
     return this.#client.writeValue(name, value);
+  }
+
+  setWriteMode(mode: PlcWriteMode): PlcWriteModeResult {
+    if (mode === "enabled" && this.config.readOnly) {
+      throw new Error(
+        "Writes cannot be enabled while config.readOnly is true.",
+      );
+    }
+
+    this.#writeMode = mode;
+
+    return {
+      writeMode: this.#writeMode,
+      runtimeWriteEnabled: this.#writeMode === "enabled",
+      configReadOnly: this.config.readOnly,
+      writesAllowed: !this.config.readOnly && this.#writeMode === "enabled",
+      message:
+        this.#writeMode === "enabled"
+          ? "PLC writes are enabled for this session."
+          : "PLC writes are blocked for this session.",
+    };
+  }
+
+  getWriteModeState(): PlcWriteModeResult {
+    return {
+      writeMode: this.#writeMode,
+      runtimeWriteEnabled: this.#writeMode === "enabled",
+      configReadOnly: this.config.readOnly,
+      writesAllowed: !this.config.readOnly && this.#writeMode === "enabled",
+      message:
+        this.#writeMode === "enabled"
+          ? "PLC writes are enabled for this session."
+          : "PLC writes are blocked for this session.",
+    };
   }
 
   async readState(): Promise<PlcStateResult> {
@@ -318,6 +377,12 @@ export class AdsService {
     return {
       connection: this.#client.connection,
       adsState: this.#state,
+      writeMode: this.#writeMode,
+      writePolicy: {
+        configReadOnly: this.config.readOnly,
+        runtimeWriteEnabled: this.#writeMode === "enabled",
+        allowlistCount: this.config.writeAllowlist.length,
+      },
       plcRuntimeState,
       tcSystemState,
       tcSystemExtendedState,
@@ -461,6 +526,32 @@ export class AdsService {
     this.#symbolCache.clear();
     this.#handleCache.clear();
     this.#symbolsLoaded = false;
+  }
+
+  #assertWriteAllowed(symbolName: string): void {
+    if (this.config.readOnly) {
+      throw new Error(
+        "PLC writes are disabled by configuration because readOnly is true.",
+      );
+    }
+
+    if (this.#writeMode !== "enabled") {
+      throw new Error(
+        "PLC writes are blocked by the runtime write gate. Enable writes explicitly before calling plc_write.",
+      );
+    }
+
+    if (this.config.writeAllowlist.length === 0) {
+      throw new Error(
+        "PLC write denied because the configured writeAllowlist is empty, so no writes are currently permitted.",
+      );
+    }
+
+    if (!isWriteAllowed(this.config, symbolName)) {
+      throw new Error(
+        `PLC write denied because "${symbolName}" is not in the configured writeAllowlist.`,
+      );
+    }
   }
 
   async #refreshCachesAfterReconnect(): Promise<void> {

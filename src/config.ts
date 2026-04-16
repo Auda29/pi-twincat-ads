@@ -34,7 +34,7 @@ const adsPortSchema = z
   .min(1, "ADS port must be greater than zero.")
   .max(65535, "ADS port must be 65535 or lower.");
 
-const pathPatternSchema = z
+const symbolPathSchema = z
   .string()
   .trim()
   .min(1, "Allowlist entries must not be empty.")
@@ -44,8 +44,8 @@ const commonConfigSchema = z.object({
   targetAmsNetId: amsNetIdSchema,
   targetAdsPort: adsPortSchema.default(851),
   readOnly: z.boolean().default(true),
-  writeAllowlist: z.array(pathPatternSchema).default([]),
-  contextSnapshotSymbols: z.array(pathPatternSchema).default([]),
+  writeAllowlist: z.array(symbolPathSchema).default([]),
+  contextSnapshotSymbols: z.array(symbolPathSchema).default([]),
   notificationCycleTimeMs: z
     .number()
     .int()

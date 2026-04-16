@@ -38,10 +38,11 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - Einheitliche Rückgabeformate mit Name, Typ, Wert, Status und Zeitstempel definieren.
 - Fehlerfälle für unbekannte Symbole und Verbindungsprobleme sauber abbilden.
 
-### 6. Schreibpfad mit Sicherheitsregeln umsetzen `[Open]`
+### 6. Schreibpfad mit Sicherheitsregeln umsetzen `[Done]`
 
 - `plc_write(name, value)` implementieren.
 - `readOnly`-Schalter und `writeAllowlist` zentral durchsetzen.
+- Ein Runtime-Write-Gate ergänzen: Der Modus ist standardmäßig `read-only` und bleibt aktiv, bis er explizit per Command deaktiviert bzw. für Schreibzugriffe freigeschaltet wird.
 - Schreibzugriffe mit klaren Ablehnungsgründen versehen.
 - Schreibverhalten so kapseln, dass spätere Bestätigungslogik leicht anschließbar bleibt.
 
