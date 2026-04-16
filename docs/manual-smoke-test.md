@@ -9,6 +9,7 @@ This smoke test is intended for a TwinCAT 3 PLC reachable on ADS port `851`.
 - The extension is configured with the intended `targetAmsNetId` and port.
 - If direct mode is used, `routerAddress`, `localAmsNetId`, and `localAdsPort` are correct.
 - A safe non-critical symbol exists for read/write checks.
+- For packaged Pi testing, Pi is started with `--plc-config ./plc.config.json` or matching environment variables.
 
 ## Smoke Test Steps
 
@@ -44,6 +45,7 @@ This smoke test is intended for a TwinCAT 3 PLC reachable on ADS port `851`.
 - Call `context`.
   Expect live snapshot data plus `failedSnapshots`, `watchCount`, and `writeMode`.
 - If `failedSnapshots` is non-empty, verify the configured `contextSnapshotSymbols` against the current PLC symbol table before trusting the injected context.
+- In packaged Pi usage, confirm `session_shutdown` releases ADS resources cleanly because it is mapped to the internal `session_end` hook.
 
 ## Failure Clues
 

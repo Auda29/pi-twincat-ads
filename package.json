@@ -7,6 +7,16 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pi-extension": {
+      "types": "./dist/pi-extension.d.ts",
+      "import": "./dist/pi-extension.js"
+    }
+  },
   "files": [
     "dist",
     "skills",
@@ -20,6 +30,14 @@
     "beckhoff",
     "plc"
   ],
+  "pi": {
+    "extensions": [
+      "./dist/pi-extension.js"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
   "engines": {
     "node": ">=20"
   },
@@ -31,9 +49,11 @@
   },
   "dependencies": {
     "ads-client": "^2.2.0",
+    "@sinclair/typebox": "^0.34.49",
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.67.3",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"

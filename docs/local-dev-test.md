@@ -2,6 +2,8 @@
 
 Use this when you want to exercise the built package directly against a real PLC before wiring it into a Pi host instance.
 
+If you want to test the real Pi packaging layer instead, use the same JSON config file and start Pi with `--plc-config ./local.config.json`.
+
 ## 1. Build the package
 
 ```bash
@@ -47,7 +49,21 @@ Only use the write path when all of the following are true:
 - the symbol is listed in `writeAllowlist`
 - the target symbol is operationally safe to change
 
-## 4. What the script does
+## 4. Run through Pi itself
+
+Once the package is built and installed in Pi, start it with the same config:
+
+```bash
+pi --plc-config ./local.config.json
+```
+
+The packaged adapter reads the PLC config from:
+
+- `--plc-config`
+- `PI_TWINCAT_ADS_CONFIG`
+- `PI_TWINCAT_ADS_CONFIG_JSON`
+
+## 5. What the script does
 
 The runner uses the built package from `dist/` and executes this sequence:
 
@@ -67,7 +83,7 @@ The runner uses the built package from `dist/` and executes this sequence:
 
 All results are printed as formatted JSON.
 
-## 5. Failure clues
+## 6. Failure clues
 
 - Connection failures usually point to route, AMS Net ID, router, or port issues.
 - `failedSnapshots` usually means one or more `contextSnapshotSymbols` are wrong or stale.

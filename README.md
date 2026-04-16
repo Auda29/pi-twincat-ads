@@ -36,16 +36,61 @@ The extension is implemented and currently includes:
 
 ## Installation
 
+### As a Pi package
+
+Build and publish or pack the package, then install it into Pi:
+
+```bash
+pi install npm:pi-twincat-ads
+```
+
+The package ships a Pi manifest in `package.json` and registers:
+
+- the extension entry at `./dist/pi-extension.js`
+- the bundled skill directory at `./skills`
+
+Pi discovers the extension from the manifest and loads it automatically.
+
+### For local development
+
 ```bash
 npm install
 npm run build
 ```
 
-`register()` returns the extension's `tools` and `hooks`, so the package can be mounted into the surrounding Pi integration layer.
+The package also exports `createExtension()` for direct local/dev integration outside a Pi host.
 
 ## Configuration
 
 Runtime configuration is validated with Zod.
+
+### Pi runtime config
+
+The Pi adapter expects one of these inputs at startup:
+
+- `--plc-config ./plc.config.json`
+- `PI_TWINCAT_ADS_CONFIG=./plc.config.json`
+- `PI_TWINCAT_ADS_CONFIG_JSON='{"connectionMode":"router",...}'`
+
+Typical Pi launch pattern:
+
+```bash
+pi --plc-config ./plc.config.json
+```
+
+Example `plc.config.json`:
+
+```json
+{
+  "connectionMode": "router",
+  "targetAmsNetId": "192.168.1.120.1.1",
+  "targetAdsPort": 851,
+  "readOnly": true,
+  "contextSnapshotSymbols": [
+    "MAIN.someValue"
+  ]
+}
+```
 
 ### Common fields
 
@@ -142,6 +187,8 @@ Watches keep local metadata such as mode, cycle time, notification handle, and t
 
 ## Hook Behavior
 
+In the packaged Pi adapter, the internal hooks are bound to real Pi lifecycle events.
+
 ### `session_start`
 
 - connects to ADS
@@ -169,6 +216,8 @@ Watches keep local metadata such as mode, cycle time, notification handle, and t
 - disconnects ADS
 - releases notifications, handles, and connection state
 
+In Pi this cleanup is triggered from `session_shutdown`.
+
 ## Verification
 
 Useful commands:
@@ -180,6 +229,8 @@ npm test
 ```
 
 The current automated suite covers config validation, connection deduplication, write gates, handle caching, watch lifecycle, reconnect rebinds, tool behavior, and hook behavior. For live verification against a PLC, see [docs/manual-smoke-test.md](docs/manual-smoke-test.md).
+
+For a direct local PLC test without a Pi host instance, see [docs/local-dev-test.md](docs/local-dev-test.md).
 
 ## Repository
 
