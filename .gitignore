@@ -20,6 +20,7 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+local.config.json
 
 # Test / coverage
 coverage/
