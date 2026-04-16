@@ -2,6 +2,7 @@
   "name": "pi-twincat-ads",
   "version": "0.1.0",
   "description": "Pi extension for reading and writing TwinCAT runtime values over ADS.",
+  "author": "Niklas W",
   "license": "MIT",
   "private": false,
   "type": "module",
@@ -21,7 +22,9 @@
     "dist",
     "skills",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "keywords": [
     "pi-package",
@@ -41,19 +44,28 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Auda29/pi-twincat-ads.git"
+  },
+  "homepage": "https://github.com/Auda29/pi-twincat-ads#readme",
+  "bugs": {
+    "url": "https://github.com/Auda29/pi-twincat-ads/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "smoke:local": "node ./scripts/local-dev-smoke.mjs"
+    "smoke:local": "node ./scripts/local-dev-smoke.mjs",
+    "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.67.3",
     "ads-client": "^2.2.0",
     "@sinclair/typebox": "^0.34.49",
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "^0.67.3",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"
