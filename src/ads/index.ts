@@ -123,6 +123,8 @@ export class AdsService {
 
   #state: AdsConnectionState = "disconnected";
   #lastError: Error | undefined;
+  #connectPromise: Promise<AdsClientConnection> | undefined;
+  #symbolsLoaded = false;
 
   constructor(
     private readonly config: ExtensionRuntimeConfig,
@@ -153,45 +155,79 @@ export class AdsService {
       return this.#client.connection;
     }
 
-    this.#state = "connecting";
-
-    try {
-      const connection = await this.#client.connect();
-
-      await this.#client.cacheSymbols();
-      await this.#client.cacheDataTypes();
-      await this.#loadSymbolCache();
-
-      this.#state = "connected";
-      this.#lastError = undefined;
-      return connection;
-    } catch (error) {
-      this.#state = "degraded";
-      this.#lastError = error instanceof Error ? error : new Error(String(error));
-      throw error;
+    if (this.#connectPromise) {
+      return this.#connectPromise;
     }
+
+    this.#state = "connecting";
+    this.#connectPromise = (async () => {
+      try {
+        const connection = await this.#client.connect();
+
+        await this.#client.cacheSymbols();
+        await this.#client.cacheDataTypes();
+        await this.#loadSymbolCache();
+
+        this.#state = "connected";
+        this.#lastError = undefined;
+        return connection;
+      } catch (error) {
+        this.#state = "degraded";
+        this.#lastError =
+          error instanceof Error ? error : new Error(String(error));
+        throw error;
+      } finally {
+        this.#connectPromise = undefined;
+      }
+    })();
+
+    return this.#connectPromise;
   }
 
   async disconnect(): Promise<void> {
     const watchEntries = [...this.#watchCache.values()];
+    const cleanupErrors: Error[] = [];
 
     for (const watch of watchEntries) {
-      await this.#client.unsubscribe(watch);
+      try {
+        await this.#client.unsubscribe(watch);
+      } catch (error) {
+        cleanupErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     }
 
     for (const handle of this.#handleCache.values()) {
-      await this.#client.deleteVariableHandle(handle);
+      try {
+        await this.#client.deleteVariableHandle(handle);
+      } catch (error) {
+        cleanupErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     }
 
     this.#watchCache.clear();
     this.#handleCache.clear();
     this.#symbolCache.clear();
+    this.#symbolsLoaded = false;
 
     if (this.#client.connection.connected) {
-      await this.#client.disconnect();
+      try {
+        await this.#client.disconnect();
+      } catch (error) {
+        cleanupErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     }
 
     this.#state = "disconnected";
+
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, "ADS cleanup failed.");
+    }
   }
 
   async listSymbols(filter?: string): Promise<PlcSymbolSummary[]> {
@@ -380,12 +416,20 @@ export class AdsService {
 
     this.#client.on("connectionLost", () => {
       this.#state = "degraded";
+      this.#invalidateRuntimeCaches();
       this.dependencies.logger?.warn?.("ADS client connection lost.");
     });
 
     this.#client.on("reconnect", () => {
       this.#state = "connected";
+      this.#invalidateRuntimeCaches();
+      void this.#refreshCachesAfterReconnect();
       this.dependencies.logger?.info?.("ADS client reconnected.");
+    });
+
+    this.#client.on("plcSymbolVersionChange", () => {
+      this.#invalidateRuntimeCaches();
+      void this.#refreshCachesAfterReconnect();
     });
 
     this.#client.on("client-error", (error) => {
@@ -395,7 +439,7 @@ export class AdsService {
   }
 
   async #ensureSymbolsLoaded(): Promise<void> {
-    if (this.#symbolCache.size > 0) {
+    if (this.#symbolsLoaded) {
       return;
     }
 
@@ -408,6 +452,31 @@ export class AdsService {
 
     for (const [name, symbol] of Object.entries(symbols)) {
       this.#symbolCache.set(name, symbol);
+    }
+
+    this.#symbolsLoaded = true;
+  }
+
+  #invalidateRuntimeCaches(): void {
+    this.#symbolCache.clear();
+    this.#handleCache.clear();
+    this.#symbolsLoaded = false;
+  }
+
+  async #refreshCachesAfterReconnect(): Promise<void> {
+    if (!this.#client.connection.connected) {
+      return;
+    }
+
+    try {
+      await this.#client.cacheSymbols();
+      await this.#client.cacheDataTypes();
+      await this.#loadSymbolCache();
+    } catch (error) {
+      this.#lastError = error instanceof Error ? error : new Error(String(error));
+      this.dependencies.logger?.warn?.(
+        "ADS cache refresh after reconnect failed.",
+      );
     }
   }
 }

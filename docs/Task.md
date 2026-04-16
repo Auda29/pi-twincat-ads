@@ -17,21 +17,21 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - Defaults für `targetAdsPort`, `routerTcpPort` und `notificationCycleTimeMs` zentral setzen.
 - Klare Validierungsfehler für ungültige AMS-/Router-Konfigurationen ausgeben.
 
-### 3. ADS-Service mit Verbindungsmanagement bauen `[Ready for Review]`
+### 3. ADS-Service mit Verbindungsmanagement bauen `[Done]`
 
 - Zentralen ADS-Service auf Basis von `ads-client` implementieren.
 - Connection-State (`disconnected`, `connecting`, `connected`, `degraded`) abbilden.
 - Connect, Disconnect, Preflight-Checks und Reconnect-Grundlogik kapseln.
 - Symbol-Upload und Basis-Metadaten-Laden an den Service hängen.
 
-### 4. Symbol-, Typ- und Handle-Verwaltung ergänzen `[Ready for Review]`
+### 4. Symbol-, Typ- und Handle-Verwaltung ergänzen `[Done]`
 
 - Symboltabelle für Discovery und Kontextbereitstellung laden und cachen.
 - Handle-Cache für häufig genutzte Symbole und Writes einführen.
 - Handle-Lebensdauer und Freigabe bei Reconnect bzw. Session-Ende sauber behandeln.
 - Typ-Metadaten so aufbereiten, dass Reads, Writes und Symbol-Listen konsistent arbeiten.
 
-### 5. Lese- und Status-Tools implementieren `[Ready for Review]`
+### 5. Lese- und Status-Tools implementieren `[Done]`
 
 - `plc_list_symbols(filter?)`, `plc_read(name)`, `plc_read_many(names[])` und `plc_state()` implementieren.
 - `plc_read_many` intern als gebündelten Mehrfachzugriff auslegen.

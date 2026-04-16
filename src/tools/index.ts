@@ -10,30 +10,30 @@ import type {
 const symbolNameSchema = z
   .string()
   .trim()
-  .min(1, "Symbol name must not be empty.")
-  .transform((value) => value.trim());
+  .min(1, "Symbol name must not be empty.");
 
-const listSymbolsInputSchema = z.object({
-  filter: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .transform((value) => value?.trim()),
-});
+const listSymbolsInputSchema = z
+  .object({
+    filter: z.string().trim().min(1).optional(),
+  })
+  .strict();
 
-const readInputSchema = z.object({
-  name: symbolNameSchema,
-});
+const readInputSchema = z
+  .object({
+    name: symbolNameSchema,
+  })
+  .strict();
 
-const readManyInputSchema = z.object({
-  names: z
-    .array(symbolNameSchema)
-    .min(1, "At least one PLC symbol is required.")
-    .max(100, "At most 100 PLC symbols can be read at once."),
-});
+const readManyInputSchema = z
+  .object({
+    names: z
+      .array(symbolNameSchema)
+      .min(1, "At least one PLC symbol is required.")
+      .max(100, "At most 100 PLC symbols can be read at once."),
+  })
+  .strict();
 
-const stateInputSchema = z.object({});
+const stateInputSchema = z.object({}).strict();
 
 export interface ToolHandlerContext {
   readonly adsService: AdsService;
