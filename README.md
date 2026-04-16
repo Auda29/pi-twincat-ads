@@ -1,17 +1,16 @@
 # pi-twincat-ads
 
-Pi extension for reading and writing TwinCAT runtime values over **ADS** (Automation Device Specification).
+Pi extension for reading and writing TwinCAT runtime values over ADS.
 
 ## Status
 
-The extension scaffold, ADS service, tools, watches, and session hooks are implemented.
+The extension is implemented and currently includes:
 
-Current focus:
-
-- core ADS integration
-- safe write gating
-- hook-based session lifecycle
-- documentation and tests
+- an ADS service with connection management, reconnect handling, symbol and handle caches
+- read, watch, and write tools with schema validation
+- hook-based session lifecycle integration
+- a three-layer write safety model
+- automated tests and a manual smoke-test guide
 
 ## Features
 
@@ -42,11 +41,11 @@ npm install
 npm run build
 ```
 
-This package is intended to be published as a Pi-installable extension package once the surrounding Pi extension registration layer is finalized.
+`register()` returns the extension's `tools` and `hooks`, so the package can be mounted into the surrounding Pi integration layer.
 
 ## Configuration
 
-The runtime configuration is validated with Zod.
+Runtime configuration is validated with Zod.
 
 ### Common fields
 
@@ -54,7 +53,7 @@ The runtime configuration is validated with Zod.
 - `targetAdsPort`: target ADS port, default `851`
 - `readOnly`: default `true`
 - `writeAllowlist`: exact symbol names allowed for writes
-- `contextSnapshotSymbols`: symbols injected by lifecycle hooks
+- `contextSnapshotSymbols`: symbols read by lifecycle hooks for agent context
 - `notificationCycleTimeMs`: default notification cycle time, default `250`
 - `maxNotifications`: local notification cap, default `128`
 
@@ -80,7 +79,7 @@ Optional router-mode fields:
 
 ### Direct mode
 
-Use direct mode when no local ADS router is available and the client connects directly to the PLC/router endpoint.
+Use direct mode when no local ADS router is available and the client connects directly to the PLC or router endpoint.
 
 ```ts
 {
@@ -97,11 +96,11 @@ Use direct mode when no local ADS router is available and the client connects di
 
 ## ADS Prerequisites
 
-- An AMS route must exist between client and PLC/router.
+- An AMS route must exist between client and PLC or router.
 - In router mode, the host must have a working ADS router.
 - In direct mode, `routerAddress`, `localAmsNetId`, and `localAdsPort` must be configured correctly.
 - `targetAdsPort` usually points to a PLC runtime such as `851`.
-- Localhost scenarios depend on TwinCAT/router setup and are not assumed automatically.
+- Localhost scenarios depend on TwinCAT and router setup and are not assumed automatically.
 
 ## Safety Model
 
@@ -115,9 +114,9 @@ Important defaults:
 
 - `readOnly` defaults to `true`
 - runtime write mode defaults to `read-only`
-- `writeAllowlist` uses exact symbol name matches
+- `writeAllowlist` uses exact, case-sensitive symbol name matches
 
-That means writes stay blocked until configuration allows them and the runtime mode is explicitly switched to `enabled`.
+That means writes stay blocked until configuration allows them, the session-local write mode is explicitly switched to `enabled`, and the symbol is allowlisted.
 
 ## Tool Summary
 
@@ -125,8 +124,8 @@ That means writes stay blocked until configuration allows them and the runtime m
 
 - `plc_list_symbols`: list available symbols with metadata
 - `plc_read`: read one symbol
-- `plc_read_many`: bundled multi-read
-- `plc_state`: inspect connection, runtime state, write mode, and watch count
+- `plc_read_many`: bundled multi-read using ADS raw multi-read
+- `plc_state`: inspect connection state, PLC runtime state, write mode, write policy, and watch count
 
 ### Write control
 
@@ -136,37 +135,41 @@ That means writes stay blocked until configuration allows them and the runtime m
 ### Watches
 
 - `plc_watch`: register or reuse a PLC notification
-- `plc_unwatch`: remove a registered watch
+- `plc_unwatch`: remove a registered watch idempotently
 - `plc_list_watches`: inspect active session watches
+
+Watches keep local metadata such as mode, cycle time, notification handle, and the latest received value and timestamp. Initial `latestData` from ADS is preserved when available, and reconnect handling rebinds active watches automatically.
 
 ## Hook Behavior
 
 ### `session_start`
 
 - connects to ADS
-- warms symbol/data type caches
+- warms symbol and data type caches
 - reads configured snapshot symbols
+- returns `failedSnapshots` for symbols that could not be read
 
 ### `before_agent_start`
 
-- returns a compact startup summary with state, snapshots, and active watches
+- returns a compact startup summary with state, snapshots, failed snapshots, and active watches
 
 ### `context`
 
 - injects configured snapshot values
-- includes current watch count and write mode state
+- includes `failedSnapshots`, current watch count, and write mode state
 
 ### `tool_call`
 
 - pre-evaluates write access for `plc_write`
-- blocks impossible write-mode changes when config keeps `readOnly=true`
+- blocks enabling runtime writes when config keeps `readOnly=true`
+- leaves defensive `plc_set_write_mode("read-only")` calls allowed
 
 ### `session_end`
 
 - disconnects ADS
-- releases notifications and handles
+- releases notifications, handles, and connection state
 
-## Development
+## Verification
 
 Useful commands:
 
@@ -175,6 +178,8 @@ npm run check
 npm run build
 npm test
 ```
+
+The current automated suite covers config validation, connection deduplication, write gates, handle caching, watch lifecycle, reconnect rebinds, tool behavior, and hook behavior. For live verification against a PLC, see [docs/manual-smoke-test.md](docs/manual-smoke-test.md).
 
 ## Repository
 

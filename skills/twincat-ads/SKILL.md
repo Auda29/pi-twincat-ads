@@ -9,6 +9,7 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 3. Use `plc_read` or `plc_read_many` before making decisions.
 4. Only use `plc_write` after checking state, symbol path, and write permissions.
 5. Use `plc_watch` for ongoing observation and `plc_list_watches` to inspect current subscriptions.
+6. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
 
 ## Tool guidance
 
@@ -17,6 +18,7 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 - Prefer `plc_list_symbols` for discovery.
 - Prefer `plc_read_many` when several related values are needed together.
 - Use `plc_state` to understand runtime mode, watch count, and current write availability.
+- If hooks return `failedSnapshots`, treat that as a configuration or PLC-symbol drift hint and verify the symbol names.
 
 ### Writes
 
@@ -31,6 +33,7 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 
 - Use `plc_watch` when repeated polling would be wasteful.
 - Default watch behavior is `on-change`.
+- A fresh watch can already expose an initial `lastValue` and `lastTimestamp` when ADS provides `latestData`.
 - Use `plc_unwatch` when the observation is no longer needed.
 - Use `plc_list_watches` before creating duplicate observation plans.
 
