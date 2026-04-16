@@ -5,23 +5,35 @@ import {
   type ExtensionRuntimeConfig,
 } from "./config.js";
 import {
+  createHookDefinitions,
+  type HookDefinition,
+  type HookHandlerContext,
+} from "./hooks/index.js";
+import {
   createToolDefinitions,
   type ToolDefinition,
   type ToolHandlerContext,
 } from "./tools/index.js";
+
+export interface ExtensionRegistration {
+  readonly tools: ToolDefinition<unknown, unknown>[];
+  readonly hooks: HookDefinition<unknown, unknown>[];
+}
 
 export interface PiTwinCatAdsExtension {
   readonly name: "pi-twincat-ads";
   readonly config: ExtensionRuntimeConfig;
   readonly adsService: AdsService;
   readonly tools: ToolDefinition<unknown, unknown>[];
-  register(): Promise<void>;
+  readonly hooks: HookDefinition<unknown, unknown>[];
+  register(): Promise<ExtensionRegistration>;
 }
 
 class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
   readonly name = "pi-twincat-ads" as const;
   readonly adsService: AdsService;
   readonly tools: ToolDefinition<unknown, unknown>[];
+  readonly hooks: HookDefinition<unknown, unknown>[];
 
   constructor(
     readonly config: ExtensionRuntimeConfig,
@@ -29,19 +41,30 @@ class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
   ) {
     this.adsService = new AdsService(config, dependencies);
 
-    const context: ToolHandlerContext = {
+    const toolContext: ToolHandlerContext = {
       adsService: this.adsService,
+    };
+    const hookContext: HookHandlerContext = {
+      adsService: this.adsService,
+      config,
     };
 
     this.tools = createToolDefinitions().map((tool) => ({
       ...tool,
-      execute: (rawInput) => tool.execute(rawInput, context),
+      execute: (rawInput) => tool.execute(rawInput, toolContext),
+    }));
+
+    this.hooks = createHookDefinitions().map((hook) => ({
+      ...hook,
+      execute: (rawInput) => hook.execute(rawInput, hookContext),
     }));
   }
 
-  async register(): Promise<void> {
-    // Placeholder for upcoming tasks:
-    // tool registration, ADS service bootstrapping, and hook wiring.
+  async register(): Promise<ExtensionRegistration> {
+    return {
+      tools: this.tools,
+      hooks: this.hooks,
+    };
   }
 }
 
@@ -53,9 +76,7 @@ export function createExtension(
   return new PiTwinCatAdsExtensionImpl(runtimeConfig, dependencies);
 }
 
-export {
-  normalizeExtensionConfig,
-} from "./config.js";
+export { normalizeExtensionConfig } from "./config.js";
 
 export {
   AdsService,
@@ -63,7 +84,10 @@ export {
   type PlcReadResult,
   type PlcStateResult,
   type PlcSymbolSummary,
+  type PlcWatchMode,
   type PlcWatchRegistration,
+  type PlcWatchSnapshot,
+  type PlcWriteAccessResult,
   type PlcWriteMode,
   type PlcWriteModeResult,
 } from "./ads/index.js";
@@ -73,6 +97,12 @@ export {
   type ToolDefinition,
   type ToolExecutionResult,
 } from "./tools/index.js";
+
+export {
+  createHookDefinitions,
+  type HookDefinition,
+  type HookExecutionResult,
+} from "./hooks/index.js";
 
 export type {
   AdsConnectionMode,

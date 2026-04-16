@@ -46,14 +46,14 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - Schreibzugriffe mit klaren Ablehnungsgründen versehen.
 - Schreibverhalten so kapseln, dass spätere Bestätigungslogik leicht anschließbar bleibt.
 
-### 7. Watch- und Notification-System aufbauen `[Open]`
+### 7. Watch- und Notification-System aufbauen `[Done]`
 
 - `plc_watch(name)` mit ADS-Notifications implementieren.
 - Default-Verhalten als `on change`, mit zyklischem Fallback über `notificationCycleTimeMs`.
 - Notification-Registrierung, lokale Zuordnung und Deregistrierung sauber verwalten.
 - Reconnect-Verhalten so bauen, dass aktive Watches automatisch neu registriert werden.
 
-### 8. Hooks und Session-Lifecycle integrieren `[Open]`
+### 8. Hooks und Session-Lifecycle integrieren `[Done]`
 
 - `session_start`, `before_agent_start`, `context`, `tool_call` und `session_end` implementieren.
 - Session-Start mit Verbindungsaufbau und initialem Symbol-/Snapshot-Laden koppeln.

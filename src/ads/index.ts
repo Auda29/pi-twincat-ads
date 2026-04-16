@@ -12,6 +12,7 @@ import {
   type ReadRawMultiCommand,
   type ReadValueResult,
   type SubscriptionCallback,
+  type SubscriptionData,
   type VariableHandle,
   type WriteValueResult,
 } from "ads-client";
@@ -32,6 +33,7 @@ export type AdsConnectionState =
   | "degraded";
 
 export type PlcWriteMode = "read-only" | "enabled";
+export type PlcWatchMode = "on-change" | "cyclic";
 
 export interface PlcSymbolSummary {
   readonly name: string;
@@ -51,10 +53,21 @@ export interface PlcReadResult<T = unknown> {
   readonly symbol: AdsSymbol;
 }
 
+export interface PlcWatchSnapshot<T = unknown> {
+  readonly name: string;
+  readonly notificationHandle: number;
+  readonly cycleTimeMs: number;
+  readonly mode: PlcWatchMode;
+  readonly active: boolean;
+  readonly lastValue?: T;
+  readonly lastTimestamp?: string;
+}
+
 export interface PlcStateResult {
   readonly connection: AdsClientConnection;
   readonly adsState: AdsConnectionState;
   readonly writeMode: PlcWriteMode;
+  readonly watchCount: number;
   readonly writePolicy: {
     readonly configReadOnly: boolean;
     readonly runtimeWriteEnabled: boolean;
@@ -66,11 +79,7 @@ export interface PlcStateResult {
   readonly deviceInfo: AdsDeviceInfo;
 }
 
-export interface PlcWatchRegistration {
-  readonly name: string;
-  readonly notificationHandle: number;
-  readonly cycleTimeMs: number;
-  readonly mode: "on-change" | "cyclic";
+export interface PlcWatchRegistration extends PlcWatchSnapshot {
   unsubscribe(): Promise<void>;
 }
 
@@ -80,6 +89,21 @@ export interface PlcWriteModeResult {
   readonly configReadOnly: boolean;
   readonly writesAllowed: boolean;
   readonly message: string;
+}
+
+export interface PlcWriteAccessResult {
+  readonly allow: boolean;
+  readonly reason?: string;
+}
+
+interface PlcWatchEntry {
+  subscription: ActiveSubscription<unknown>;
+  cycleTimeMs: number;
+  mode: PlcWatchMode;
+  callback?: SubscriptionCallback<unknown>;
+  maxDelayMs?: number;
+  lastValue?: unknown;
+  lastTimestamp?: string;
 }
 
 function toAdsClientSettings(
@@ -138,7 +162,7 @@ export class AdsService {
   readonly #client: Client;
   readonly #symbolCache = new Map<string, AdsSymbol>();
   readonly #handleCache = new Map<string, VariableHandle>();
-  readonly #watchCache = new Map<string, ActiveSubscription>();
+  readonly #watchCache = new Map<string, PlcWatchEntry>();
 
   #state: AdsConnectionState = "disconnected";
   #lastError: Error | undefined;
@@ -214,7 +238,7 @@ export class AdsService {
 
     for (const watch of watchEntries) {
       try {
-        await this.#client.unsubscribe(watch);
+        await this.#client.unsubscribe(watch.subscription);
       } catch (error) {
         cleanupErrors.push(
           error instanceof Error ? error : new Error(String(error)),
@@ -363,6 +387,20 @@ export class AdsService {
     };
   }
 
+  evaluateWriteAccess(symbolName: string): PlcWriteAccessResult {
+    try {
+      this.#assertWriteAllowed(symbolName);
+      return {
+        allow: true,
+      };
+    } catch (error) {
+      return {
+        allow: false,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   async readState(): Promise<PlcStateResult> {
     await this.connect();
 
@@ -378,6 +416,7 @@ export class AdsService {
       connection: this.#client.connection,
       adsState: this.#state,
       writeMode: this.#writeMode,
+      watchCount: this.#watchCache.size,
       writePolicy: {
         configReadOnly: this.config.readOnly,
         runtimeWriteEnabled: this.#writeMode === "enabled",
@@ -390,16 +429,21 @@ export class AdsService {
     };
   }
 
-  async watchValue<T = unknown>(
+  async watchValue(
     name: string,
-    callback: SubscriptionCallback<T>,
+    callback?: SubscriptionCallback<unknown>,
     options?: {
       readonly cycleTimeMs?: number;
-      readonly mode?: "on-change" | "cyclic";
+      readonly mode?: PlcWatchMode;
       readonly maxDelayMs?: number;
     },
   ): Promise<PlcWatchRegistration> {
     await this.connect();
+
+    const existing = this.#watchCache.get(name);
+    if (existing) {
+      return this.#toWatchRegistration(name, existing);
+    }
 
     if (this.#watchCache.size >= this.config.maxNotifications) {
       throw new Error(
@@ -411,26 +455,52 @@ export class AdsService {
       options?.cycleTimeMs ?? this.config.notificationCycleTimeMs;
     const mode = options?.mode ?? "on-change";
 
-    const subscription = await this.#client.subscribeValue<T>(
-      name,
-      callback,
-      cycleTimeMs,
-      mode === "on-change",
-      options?.maxDelayMs,
-    );
-
-    this.#watchCache.set(name, subscription);
-
-    return {
-      name,
-      notificationHandle: subscription.notificationHandle,
+    const entry: PlcWatchEntry = {
+      subscription: undefined as unknown as ActiveSubscription<unknown>,
       cycleTimeMs,
       mode,
-      unsubscribe: async () => {
-        await subscription.unsubscribe();
-        this.#watchCache.delete(name);
-      },
     };
+
+    if (callback !== undefined) {
+      entry.callback = callback;
+    }
+
+    if (options?.maxDelayMs !== undefined) {
+      entry.maxDelayMs = options.maxDelayMs;
+    }
+
+    entry.subscription = await this.#subscribeWatch(name, entry);
+
+    this.#watchCache.set(name, entry);
+    return this.#toWatchRegistration(name, entry);
+  }
+
+  async unwatchValue(name: string): Promise<PlcWatchSnapshot> {
+    const entry = this.#watchCache.get(name);
+    if (!entry) {
+      return {
+        name,
+        notificationHandle: 0,
+        cycleTimeMs: this.config.notificationCycleTimeMs,
+        mode: "on-change",
+        active: false,
+      };
+    }
+
+    const snapshot = this.#toWatchSnapshot(name, entry);
+    await this.#client.unsubscribe(entry.subscription);
+    this.#watchCache.delete(name);
+
+    return {
+      ...snapshot,
+      active: false,
+    };
+  }
+
+  listWatches(): PlcWatchSnapshot[] {
+    return [...this.#watchCache.entries()]
+      .map(([name, entry]) => this.#toWatchSnapshot(name, entry))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async getOrCreateHandle(name: string): Promise<VariableHandle> {
@@ -488,13 +558,13 @@ export class AdsService {
     this.#client.on("reconnect", () => {
       this.#state = "connected";
       this.#invalidateRuntimeCaches();
-      void this.#refreshCachesAfterReconnect();
+      void this.#refreshRuntimeStateAfterReconnect();
       this.dependencies.logger?.info?.("ADS client reconnected.");
     });
 
     this.#client.on("plcSymbolVersionChange", () => {
       this.#invalidateRuntimeCaches();
-      void this.#refreshCachesAfterReconnect();
+      void this.#refreshRuntimeStateAfterReconnect();
     });
 
     this.#client.on("client-error", (error) => {
@@ -554,7 +624,7 @@ export class AdsService {
     }
   }
 
-  async #refreshCachesAfterReconnect(): Promise<void> {
+  async #refreshRuntimeStateAfterReconnect(): Promise<void> {
     if (!this.#client.connection.connected) {
       return;
     }
@@ -563,12 +633,130 @@ export class AdsService {
       await this.#client.cacheSymbols();
       await this.#client.cacheDataTypes();
       await this.#loadSymbolCache();
+      await this.#rebindWatchSubscriptions();
     } catch (error) {
       this.#lastError = error instanceof Error ? error : new Error(String(error));
       this.dependencies.logger?.warn?.(
-        "ADS cache refresh after reconnect failed.",
+        "ADS runtime refresh after reconnect failed.",
       );
     }
+  }
+
+  async #rebindWatchSubscriptions(): Promise<void> {
+    const restoredSubscriptions = this.#collectActiveSubscriptionsByTarget();
+
+    for (const [name, entry] of this.#watchCache.entries()) {
+      const restored = restoredSubscriptions.get(name);
+
+      if (restored) {
+        entry.subscription = restored;
+
+        if (restored.latestData) {
+          entry.lastValue = restored.latestData.value;
+          entry.lastTimestamp = restored.latestData.timestamp.toISOString();
+        }
+
+        continue;
+      }
+
+      entry.subscription = await this.#subscribeWatch(name, entry);
+    }
+  }
+
+  #collectActiveSubscriptionsByTarget(): Map<string, ActiveSubscription<unknown>> {
+    const subscriptions = new Map<string, ActiveSubscription<unknown>>();
+
+    for (const targetContainer of Object.values(this.#client.activeSubscriptions)) {
+      for (const subscription of Object.values(targetContainer)) {
+        const target = subscription.settings.target;
+
+        if (typeof target === "string") {
+          subscriptions.set(target, subscription as ActiveSubscription<unknown>);
+        }
+      }
+    }
+
+    return subscriptions;
+  }
+
+  async #subscribeWatch(
+    name: string,
+    entry: Pick<PlcWatchEntry, "callback" | "cycleTimeMs" | "mode" | "maxDelayMs">,
+  ): Promise<ActiveSubscription<unknown>> {
+    const subscription = await this.#client.subscribeValue(
+      name,
+      this.#createWrappedWatchCallback(name, entry.callback),
+      entry.cycleTimeMs,
+      entry.mode === "on-change",
+      entry.maxDelayMs,
+    );
+
+    if (subscription.latestData) {
+      const watchEntry = this.#watchCache.get(name);
+      if (watchEntry) {
+        watchEntry.lastValue = subscription.latestData.value;
+        watchEntry.lastTimestamp = subscription.latestData.timestamp.toISOString();
+      }
+    }
+
+    return subscription;
+  }
+
+  #createWrappedWatchCallback(
+    name: string,
+    callback?: SubscriptionCallback<unknown>,
+  ): SubscriptionCallback<unknown> {
+    return (data: SubscriptionData<unknown>, subscription: ActiveSubscription<unknown>) => {
+      const entry = this.#watchCache.get(name);
+      if (entry) {
+        entry.lastValue = data.value;
+        entry.lastTimestamp = data.timestamp.toISOString();
+      }
+
+      callback?.(data, subscription);
+    };
+  }
+
+  #toWatchRegistration(
+    name: string,
+    entry: PlcWatchEntry,
+  ): PlcWatchRegistration {
+    const snapshot = this.#toWatchSnapshot(name, entry);
+
+    return {
+      ...snapshot,
+      unsubscribe: async () => {
+        await this.unwatchValue(name);
+      },
+    };
+  }
+
+  #toWatchSnapshot(name: string, entry: PlcWatchEntry): PlcWatchSnapshot {
+    const snapshot: {
+      name: string;
+      notificationHandle: number;
+      cycleTimeMs: number;
+      mode: PlcWatchMode;
+      active: boolean;
+      lastValue?: unknown;
+      lastTimestamp?: string;
+    } = {
+      name,
+      notificationHandle: entry.subscription.notificationHandle,
+      cycleTimeMs: entry.cycleTimeMs,
+      mode: entry.mode,
+      active: true,
+    };
+
+    if (entry.lastValue !== undefined) {
+      snapshot.lastValue = entry.lastValue;
+    }
+
+    if (entry.lastTimestamp !== undefined) {
+      snapshot.lastTimestamp = entry.lastTimestamp;
+    }
+
+    return snapshot;
   }
 }
 

@@ -5,7 +5,8 @@ import type {
   PlcReadResult,
   PlcStateResult,
   PlcSymbolSummary,
-  PlcWriteMode,
+  PlcWatchMode,
+  PlcWatchSnapshot,
   PlcWriteModeResult,
 } from "../ads/index.js";
 
@@ -17,6 +18,8 @@ const symbolNameSchema = z
   .string()
   .trim()
   .min(1, "Symbol name must not be empty.");
+
+const watchModeSchema = z.enum(["on-change", "cyclic"]);
 
 const listSymbolsInputSchema = z
   .object({
@@ -53,6 +56,33 @@ const setWriteModeInputSchema = z
     mode: z.enum(["read-only", "enabled"]),
   })
   .strict();
+
+const watchInputSchema = z
+  .object({
+    name: symbolNameSchema,
+    mode: watchModeSchema.optional(),
+    cycleTimeMs: z
+      .number()
+      .int()
+      .min(10, "Watch cycle time must be at least 10 ms.")
+      .max(60_000, "Watch cycle time must be 60000 ms or lower.")
+      .optional(),
+    maxDelayMs: z
+      .number()
+      .int()
+      .min(0, "Watch max delay must be 0 ms or higher.")
+      .max(60_000, "Watch max delay must be 60000 ms or lower.")
+      .optional(),
+  })
+  .strict();
+
+const unwatchInputSchema = z
+  .object({
+    name: symbolNameSchema,
+  })
+  .strict();
+
+const listWatchesInputSchema = z.object({}).strict();
 
 export interface ToolHandlerContext {
   readonly adsService: AdsService;
@@ -109,6 +139,16 @@ export interface PlcWriteToolOutput {
   };
 }
 export interface PlcSetWriteModeToolOutput extends PlcWriteModeResult {}
+export interface PlcWatchToolOutput {
+  readonly watch: PlcWatchSnapshot;
+}
+export interface PlcUnwatchToolOutput {
+  readonly watch: PlcWatchSnapshot;
+}
+export interface PlcListWatchesToolOutput {
+  readonly watches: PlcWatchSnapshot[];
+  readonly count: number;
+}
 
 function normalizeToolError(error: unknown): ToolFailureResult {
   if (error instanceof z.ZodError) {
@@ -178,6 +218,12 @@ export function createToolDefinitions(): Array<
       z.infer<typeof setWriteModeInputSchema>,
       PlcSetWriteModeToolOutput
     >
+  | ToolDefinition<z.infer<typeof watchInputSchema>, PlcWatchToolOutput>
+  | ToolDefinition<z.infer<typeof unwatchInputSchema>, PlcUnwatchToolOutput>
+  | ToolDefinition<
+      z.infer<typeof listWatchesInputSchema>,
+      PlcListWatchesToolOutput
+    >
 > {
   return [
     createToolDefinition({
@@ -217,6 +263,86 @@ export function createToolDefinitions(): Array<
         return {
           results,
           count: results.length,
+        };
+      },
+    }),
+    createToolDefinition({
+      name: "plc_watch",
+      description:
+        "Register or reuse a PLC notification watch for a symbol.",
+      inputSchema: watchInputSchema,
+      handler: async (input, context): Promise<PlcWatchToolOutput> => {
+        const watchOptions: {
+          mode?: PlcWatchMode;
+          cycleTimeMs?: number;
+          maxDelayMs?: number;
+        } = {};
+
+        if (input.mode !== undefined) {
+          watchOptions.mode = input.mode;
+        }
+
+        if (input.cycleTimeMs !== undefined) {
+          watchOptions.cycleTimeMs = input.cycleTimeMs;
+        }
+
+        if (input.maxDelayMs !== undefined) {
+          watchOptions.maxDelayMs = input.maxDelayMs;
+        }
+
+        const watch = await context.adsService.watchValue(
+          input.name,
+          undefined,
+          watchOptions,
+        );
+
+        const snapshot: {
+          name: string;
+          notificationHandle: number;
+          cycleTimeMs: number;
+          mode: PlcWatchMode;
+          active: boolean;
+          lastValue?: unknown;
+          lastTimestamp?: string;
+        } = {
+          name: watch.name,
+          notificationHandle: watch.notificationHandle,
+          cycleTimeMs: watch.cycleTimeMs,
+          mode: watch.mode,
+          active: true,
+        };
+
+        if (watch.lastValue !== undefined) {
+          snapshot.lastValue = watch.lastValue;
+        }
+
+        if (watch.lastTimestamp !== undefined) {
+          snapshot.lastTimestamp = watch.lastTimestamp;
+        }
+
+        return {
+          watch: snapshot,
+        };
+      },
+    }),
+    createToolDefinition({
+      name: "plc_unwatch",
+      description: "Remove a previously registered PLC watch by symbol name.",
+      inputSchema: unwatchInputSchema,
+      handler: async (input, context) => {
+        const watch = await context.adsService.unwatchValue(input.name);
+        return { watch };
+      },
+    }),
+    createToolDefinition({
+      name: "plc_list_watches",
+      description: "List currently registered PLC watches for this session.",
+      inputSchema: listWatchesInputSchema,
+      handler: async (_input, context) => {
+        const watches = context.adsService.listWatches();
+        return {
+          watches,
+          count: watches.length,
         };
       },
     }),
@@ -270,5 +396,8 @@ export {
   stateInputSchema,
   writeInputSchema,
   setWriteModeInputSchema,
+  watchInputSchema,
+  unwatchInputSchema,
+  listWatchesInputSchema,
   WriteDeniedError,
 };
