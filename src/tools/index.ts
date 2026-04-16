@@ -1,18 +1,15 @@
 import { z } from "zod";
 
-import type {
-  AdsService,
-  PlcReadResult,
-  PlcStateResult,
-  PlcSymbolSummary,
-  PlcWatchMode,
-  PlcWatchSnapshot,
-  PlcWriteModeResult,
+import {
+  WriteDeniedError,
+  type AdsService,
+  type PlcReadResult,
+  type PlcStateResult,
+  type PlcSymbolSummary,
+  type PlcWatchMode,
+  type PlcWatchSnapshot,
+  type PlcWriteModeResult,
 } from "../ads/index.js";
-
-class WriteDeniedError extends Error {
-  readonly code = "WRITE_DENIED" as const;
-}
 
 const symbolNameSchema = z
   .string()
@@ -162,6 +159,23 @@ function normalizeToolError(error: unknown): ToolFailureResult {
   }
 
   if (error instanceof WriteDeniedError) {
+    return {
+      ok: false,
+      error: {
+        code: "WRITE_DENIED",
+        message: error.message,
+      },
+    };
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "WRITE_DENIED" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
     return {
       ok: false,
       error: {
@@ -352,23 +366,10 @@ export function createToolDefinitions(): Array<
         "Write a PLC symbol when config and runtime write gates permit it.",
       inputSchema: writeInputSchema,
       handler: async (input, context) => {
-        let writeResult;
-
-        try {
-          writeResult = await context.adsService.writeValue(input.name, input.value);
-        } catch (error) {
-          if (
-            error instanceof Error &&
-            (error.message.includes("disabled by configuration") ||
-              error.message.includes("blocked by the runtime write gate") ||
-              error.message.includes("not in the configured writeAllowlist") ||
-              error.message.includes("allowlist is empty"))
-          ) {
-            throw new WriteDeniedError(error.message);
-          }
-
-          throw error;
-        }
+        const writeResult = await context.adsService.writeValue(
+          input.name,
+          input.value,
+        );
 
         return {
           result: {

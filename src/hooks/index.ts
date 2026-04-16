@@ -53,12 +53,14 @@ export interface SessionStartHookOutput {
   readonly connected: true;
   readonly state: PlcStateResult;
   readonly snapshotCount: number;
+  readonly failedSnapshots: string[];
 }
 
 export interface AgentStartHookOutput {
   readonly summary: {
     readonly state: PlcStateResult;
     readonly snapshots: PlcReadResult[];
+    readonly failedSnapshots: string[];
     readonly watches: ReturnType<AdsService["listWatches"]>;
   };
 }
@@ -66,6 +68,7 @@ export interface AgentStartHookOutput {
 export interface ContextHookOutput {
   readonly context: {
     readonly snapshots: PlcReadResult[];
+    readonly failedSnapshots: string[];
     readonly watchCount: number;
     readonly writeMode: PlcWriteModeResult;
   };
@@ -132,20 +135,39 @@ function createHookDefinition<TInput, TOutput>(options: {
 
 async function readConfiguredSnapshots(
   context: HookHandlerContext,
-): Promise<PlcReadResult[]> {
+): Promise<{ snapshots: PlcReadResult[]; failedSnapshots: string[] }> {
   const snapshotSymbols = context.config.contextSnapshotSymbols;
 
   if (snapshotSymbols.length === 0) {
-    return [];
+    return {
+      snapshots: [],
+      failedSnapshots: [],
+    };
   }
 
   const settled = await Promise.allSettled(
     snapshotSymbols.map((name) => context.adsService.readValue(name)),
   );
 
-  return settled.flatMap((result) =>
-    result.status === "fulfilled" ? [result.value] : [],
-  );
+  const snapshots: PlcReadResult[] = [];
+  const failedSnapshots: string[] = [];
+
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      snapshots.push(result.value);
+      return;
+    }
+
+    const symbolName = snapshotSymbols[index];
+    if (symbolName) {
+      failedSnapshots.push(symbolName);
+    }
+  });
+
+  return {
+    snapshots,
+    failedSnapshots,
+  };
 }
 
 function extractSymbolNameFromWriteArguments(argumentsValue: unknown): string | undefined {
@@ -161,6 +183,21 @@ function extractSymbolNameFromWriteArguments(argumentsValue: unknown): string | 
   return undefined;
 }
 
+function extractWriteModeFromArguments(
+  argumentsValue: unknown,
+): "read-only" | "enabled" | undefined {
+  if (
+    argumentsValue &&
+    typeof argumentsValue === "object" &&
+    "mode" in argumentsValue &&
+    (argumentsValue.mode === "read-only" || argumentsValue.mode === "enabled")
+  ) {
+    return argumentsValue.mode;
+  }
+
+  return undefined;
+}
+
 export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
   return [
     createHookDefinition({
@@ -169,7 +206,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
         await context.adsService.connect();
-        const [state, snapshots] = await Promise.all([
+        const [state, snapshotResult] = await Promise.all([
           context.adsService.readState(),
           readConfiguredSnapshots(context),
         ]);
@@ -177,7 +214,8 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
         return {
           connected: true,
           state,
-          snapshotCount: snapshots.length,
+          snapshotCount: snapshotResult.snapshots.length,
+          failedSnapshots: snapshotResult.failedSnapshots,
         };
       },
     }),
@@ -186,7 +224,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       description: "Inject a compact startup snapshot for the PLC.",
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
-        const [state, snapshots] = await Promise.all([
+        const [state, snapshotResult] = await Promise.all([
           context.adsService.readState(),
           readConfiguredSnapshots(context),
         ]);
@@ -194,7 +232,8 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
         return {
           summary: {
             state,
-            snapshots,
+            snapshots: snapshotResult.snapshots,
+            failedSnapshots: snapshotResult.failedSnapshots,
             watches: context.adsService.listWatches(),
           },
         };
@@ -205,11 +244,12 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       description: "Inject live PLC context for configured snapshot symbols.",
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
-        const snapshots = await readConfiguredSnapshots(context);
+        const snapshotResult = await readConfiguredSnapshots(context);
 
         return {
           context: {
-            snapshots,
+            snapshots: snapshotResult.snapshots,
+            failedSnapshots: snapshotResult.failedSnapshots,
             watchCount: context.adsService.listWatches().length,
             writeMode: context.adsService.getWriteModeState(),
           },
@@ -246,7 +286,9 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
 
         if (input.toolName === "plc_set_write_mode") {
           const writeMode = context.adsService.getWriteModeState();
-          const blockedByConfig = writeMode.configReadOnly;
+          const targetMode = extractWriteModeFromArguments(input.arguments);
+          const blockedByConfig =
+            writeMode.configReadOnly && targetMode === "enabled";
 
           return {
             allow: !blockedByConfig,

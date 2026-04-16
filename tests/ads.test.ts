@@ -313,6 +313,8 @@ describe("AdsService", () => {
 
     const watch = await service.watchValue("MAIN.watch");
     expect(watch.active).toBe(true);
+    expect(watch.lastValue).toBe(true);
+    expect(watch.lastTimestamp).toBe("2026-01-01T00:00:00.000Z");
     expect(service.listWatches()).toHaveLength(1);
 
     const removed = await service.unwatchValue("MAIN.watch");
@@ -363,5 +365,70 @@ describe("AdsService", () => {
     });
 
     expect(firstWatch.notificationHandle).not.toBe(999);
+  });
+
+  it("evaluates write access across all gate states", async () => {
+    const { AdsService } = await import("../src/ads/index.js");
+
+    const readOnlyService = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: ["MAIN.value"],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    expect(readOnlyService.evaluateWriteAccess("MAIN.value")).toEqual({
+      allow: false,
+      reason: "PLC writes are disabled by configuration because readOnly is true.",
+    });
+
+    const gatedService = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: false,
+      writeAllowlist: ["MAIN.value"],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    expect(gatedService.evaluateWriteAccess("MAIN.value")).toEqual({
+      allow: false,
+      reason:
+        "PLC writes are blocked by the runtime write gate. Enable writes explicitly before calling plc_write.",
+    });
+
+    gatedService.setWriteMode("enabled");
+    expect(gatedService.evaluateWriteAccess("MAIN.other").allow).toBe(false);
+    expect(gatedService.evaluateWriteAccess("MAIN.value")).toEqual({
+      allow: true,
+    });
+  });
+
+  it("reads many symbols via raw multi read", async () => {
+    const { AdsService } = await import("../src/ads/index.js");
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    const results = await service.readMany(["MAIN.value", "MAIN.watch"]);
+
+    expect(results).toHaveLength(2);
+    expect(results[0]?.name).toBe("MAIN.value");
+    expect(results[0]?.value).toBe(42);
+    expect(results[1]?.name).toBe("MAIN.watch");
   });
 });

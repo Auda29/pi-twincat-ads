@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { WriteDeniedError } from "../src/ads/index.js";
 import { createToolDefinitions } from "../src/tools/index.js";
 
 function createAdsServiceStub() {
@@ -115,7 +116,7 @@ describe("tools", () => {
     const adsService = {
       ...createAdsServiceStub(),
       writeValue: async () => {
-        throw new Error(
+        throw new WriteDeniedError(
           "PLC writes are blocked by the runtime write gate. Enable writes explicitly before calling plc_write.",
         );
       },

@@ -96,6 +96,10 @@ export interface PlcWriteAccessResult {
   readonly reason?: string;
 }
 
+export class WriteDeniedError extends Error {
+  readonly code = "WRITE_DENIED" as const;
+}
+
 interface PlcWatchEntry {
   subscription: ActiveSubscription<unknown>;
   cycleTimeMs: number;
@@ -355,36 +359,17 @@ export class AdsService {
 
   setWriteMode(mode: PlcWriteMode): PlcWriteModeResult {
     if (mode === "enabled" && this.config.readOnly) {
-      throw new Error(
+      throw new WriteDeniedError(
         "Writes cannot be enabled while config.readOnly is true.",
       );
     }
 
     this.#writeMode = mode;
-
-    return {
-      writeMode: this.#writeMode,
-      runtimeWriteEnabled: this.#writeMode === "enabled",
-      configReadOnly: this.config.readOnly,
-      writesAllowed: !this.config.readOnly && this.#writeMode === "enabled",
-      message:
-        this.#writeMode === "enabled"
-          ? "PLC writes are enabled for this session."
-          : "PLC writes are blocked for this session.",
-    };
+    return this.#buildWriteModeResult();
   }
 
   getWriteModeState(): PlcWriteModeResult {
-    return {
-      writeMode: this.#writeMode,
-      runtimeWriteEnabled: this.#writeMode === "enabled",
-      configReadOnly: this.config.readOnly,
-      writesAllowed: !this.config.readOnly && this.#writeMode === "enabled",
-      message:
-        this.#writeMode === "enabled"
-          ? "PLC writes are enabled for this session."
-          : "PLC writes are blocked for this session.",
-    };
+    return this.#buildWriteModeResult();
   }
 
   evaluateWriteAccess(symbolName: string): PlcWriteAccessResult {
@@ -455,11 +440,10 @@ export class AdsService {
       options?.cycleTimeMs ?? this.config.notificationCycleTimeMs;
     const mode = options?.mode ?? "on-change";
 
-    const entry: PlcWatchEntry = {
-      subscription: undefined as unknown as ActiveSubscription<unknown>,
+    const entry = {
       cycleTimeMs,
       mode,
-    };
+    } as PlcWatchEntry;
 
     if (callback !== undefined) {
       entry.callback = callback;
@@ -469,9 +453,14 @@ export class AdsService {
       entry.maxDelayMs = options.maxDelayMs;
     }
 
+    this.#watchCache.set(name, entry);
     entry.subscription = await this.#subscribeWatch(name, entry);
 
-    this.#watchCache.set(name, entry);
+    if (entry.subscription.latestData) {
+      entry.lastValue = entry.subscription.latestData.value;
+      entry.lastTimestamp = entry.subscription.latestData.timestamp.toISOString();
+    }
+
     return this.#toWatchRegistration(name, entry);
   }
 
@@ -600,25 +589,25 @@ export class AdsService {
 
   #assertWriteAllowed(symbolName: string): void {
     if (this.config.readOnly) {
-      throw new Error(
+      throw new WriteDeniedError(
         "PLC writes are disabled by configuration because readOnly is true.",
       );
     }
 
     if (this.#writeMode !== "enabled") {
-      throw new Error(
+      throw new WriteDeniedError(
         "PLC writes are blocked by the runtime write gate. Enable writes explicitly before calling plc_write.",
       );
     }
 
     if (this.config.writeAllowlist.length === 0) {
-      throw new Error(
+      throw new WriteDeniedError(
         "PLC write denied because the configured writeAllowlist is empty, so no writes are currently permitted.",
       );
     }
 
     if (!isWriteAllowed(this.config, symbolName)) {
-      throw new Error(
+      throw new WriteDeniedError(
         `PLC write denied because "${symbolName}" is not in the configured writeAllowlist.`,
       );
     }
@@ -757,6 +746,19 @@ export class AdsService {
     }
 
     return snapshot;
+  }
+
+  #buildWriteModeResult(): PlcWriteModeResult {
+    return {
+      writeMode: this.#writeMode,
+      runtimeWriteEnabled: this.#writeMode === "enabled",
+      configReadOnly: this.config.readOnly,
+      writesAllowed: !this.config.readOnly && this.#writeMode === "enabled",
+      message:
+        this.#writeMode === "enabled"
+          ? "PLC writes are enabled for this session."
+          : "PLC writes are blocked for this session.",
+    };
   }
 }
 
