@@ -4,10 +4,12 @@ import {
   type ActiveSubscription,
   type AdsClientConnection,
   type AdsClientSettings,
+  type AdsDataType,
   type AdsDeviceInfo,
   type AdsState,
   type AdsSymbol,
   type AdsTcSystemExtendedState,
+  type ReadRawMultiCommand,
   type ReadValueResult,
   type SubscriptionCallback,
   type VariableHandle,
@@ -46,6 +48,7 @@ export interface PlcReadResult<T = unknown> {
 
 export interface PlcStateResult {
   readonly connection: AdsClientConnection;
+  readonly adsState: AdsConnectionState;
   readonly plcRuntimeState: AdsState;
   readonly tcSystemState: AdsState;
   readonly tcSystemExtendedState: AdsTcSystemExtendedState;
@@ -104,6 +107,14 @@ function toReadResult<T>(result: ReadValueResult<T>): PlcReadResult<T> {
   };
 }
 
+function toRawReadCommand(symbol: AdsSymbol): ReadRawMultiCommand {
+  return {
+    indexGroup: symbol.indexGroup,
+    indexOffset: symbol.indexOffset,
+    size: symbol.size,
+  };
+}
+
 export class AdsService {
   readonly #client: Client;
   readonly #symbolCache = new Map<string, AdsSymbol>();
@@ -149,13 +160,7 @@ export class AdsService {
 
       await this.#client.cacheSymbols();
       await this.#client.cacheDataTypes();
-
-      const symbols = await this.#client.getSymbols();
-      this.#symbolCache.clear();
-
-      for (const [name, symbol] of Object.entries(symbols)) {
-        this.#symbolCache.set(name, symbol);
-      }
+      await this.#loadSymbolCache();
 
       this.#state = "connected";
       this.#lastError = undefined;
@@ -191,13 +196,7 @@ export class AdsService {
 
   async listSymbols(filter?: string): Promise<PlcSymbolSummary[]> {
     await this.connect();
-
-    if (this.#symbolCache.size === 0) {
-      const symbols = await this.#client.getSymbols();
-      for (const [name, symbol] of Object.entries(symbols)) {
-        this.#symbolCache.set(name, symbol);
-      }
-    }
+    await this.#ensureSymbolsLoaded();
 
     const normalizedFilter = filter?.trim().toLowerCase();
 
@@ -225,11 +224,38 @@ export class AdsService {
 
   async readMany(names: string[]): Promise<PlcReadResult[]> {
     await this.connect();
+    await this.#ensureSymbolsLoaded();
+
+    const symbols = await Promise.all(names.map((name) => this.getSymbol(name)));
+    const commands = symbols.map((symbol) => toRawReadCommand(symbol));
+    const rawResults = await this.#client.readRawMulti(commands);
+    const timestamp = new Date().toISOString();
 
     return Promise.all(
-      names.map(async (name) => {
-        const result = await this.#client.readValue(name);
-        return toReadResult(result);
+      rawResults.map(async (result, index) => {
+        const symbol = symbols[index];
+        if (!symbol) {
+          throw new Error(
+            `Internal symbol mapping failed for PLC read at index ${index}.`,
+          );
+        }
+
+        if (!result.success || !result.value) {
+          throw new Error(`Failed to read PLC symbol "${symbol.name}".`);
+        }
+
+        const value = await this.#client.convertFromRaw(
+          result.value,
+          symbol.type as string | AdsDataType,
+        );
+
+        return {
+          name: symbol.name,
+          value,
+          type: symbol.type,
+          timestamp,
+          symbol,
+        };
       }),
     );
   }
@@ -255,6 +281,7 @@ export class AdsService {
 
     return {
       connection: this.#client.connection,
+      adsState: this.#state,
       plcRuntimeState,
       tcSystemState,
       tcSystemExtendedState,
@@ -318,6 +345,18 @@ export class AdsService {
     return handle;
   }
 
+  async getSymbol(name: string): Promise<AdsSymbol> {
+    await this.connect();
+    await this.#ensureSymbolsLoaded();
+
+    const cached = this.#symbolCache.get(name);
+    if (cached) {
+      return cached;
+    }
+
+    throw new Error(`PLC symbol "${name}" was not found.`);
+  }
+
   async releaseHandle(name: string): Promise<void> {
     const handle = this.#handleCache.get(name);
     if (!handle) {
@@ -353,6 +392,23 @@ export class AdsService {
       this.#lastError = error;
       this.dependencies.logger?.error?.("ADS client error.", error);
     });
+  }
+
+  async #ensureSymbolsLoaded(): Promise<void> {
+    if (this.#symbolCache.size > 0) {
+      return;
+    }
+
+    await this.#loadSymbolCache();
+  }
+
+  async #loadSymbolCache(): Promise<void> {
+    const symbols = await this.#client.getSymbols();
+    this.#symbolCache.clear();
+
+    for (const [name, symbol] of Object.entries(symbols)) {
+      this.#symbolCache.set(name, symbol);
+    }
   }
 }
 

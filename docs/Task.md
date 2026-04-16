@@ -31,7 +31,7 @@ Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungssch
 - Handle-Lebensdauer und Freigabe bei Reconnect bzw. Session-Ende sauber behandeln.
 - Typ-Metadaten so aufbereiten, dass Reads, Writes und Symbol-Listen konsistent arbeiten.
 
-### 5. Lese- und Status-Tools implementieren `[Open]`
+### 5. Lese- und Status-Tools implementieren `[Ready for Review]`
 
 - `plc_list_symbols(filter?)`, `plc_read(name)`, `plc_read_many(names[])` und `plc_state()` implementieren.
 - `plc_read_many` intern als gebündelten Mehrfachzugriff auslegen.
