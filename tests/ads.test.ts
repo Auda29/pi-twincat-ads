@@ -72,7 +72,20 @@ class MockClient extends EventEmitter {
   }
 
   async readValue(name: string) {
-    const symbol = mockState.symbols[name];
+    const symbol =
+      mockState.symbols[name] ??
+      (name in mockState.values
+        ? {
+            name,
+            type: "INT",
+            comment: "",
+            size: 2,
+            flags: 0,
+            indexGroup: 100,
+            indexOffset: 200,
+          }
+        : undefined);
+
     if (!symbol) {
       throw new Error(`Unknown symbol ${name}`);
     }
@@ -223,6 +236,26 @@ describe("AdsService", () => {
     mockState.unsubscribeCalls = 0;
     mockState.nextNotificationHandle = 100;
     mockState.clientInstances.length = 0;
+    mockState.symbols = {
+      "MAIN.value": {
+        name: "MAIN.value",
+        type: "INT",
+        comment: "Test value",
+        size: 2,
+        flags: 0,
+        indexGroup: 1,
+        indexOffset: 2,
+      },
+      "MAIN.watch": {
+        name: "MAIN.watch",
+        type: "BOOL",
+        comment: "Watch value",
+        size: 1,
+        flags: 0,
+        indexGroup: 3,
+        indexOffset: 4,
+      },
+    };
     mockState.values["MAIN.value"] = 42;
     mockState.values["MAIN.watch"] = true;
   });
@@ -430,5 +463,74 @@ describe("AdsService", () => {
     expect(results[0]?.name).toBe("MAIN.value");
     expect(results[0]?.value).toBe(42);
     expect(results[1]?.name).toBe("MAIN.watch");
+  });
+
+  it("resolves symbols case-insensitively for raw multi read", async () => {
+    const { AdsService } = await import("../src/ads/index.js");
+
+    mockState.symbols = {
+      "main.value": {
+        name: "MAIN.value",
+        type: "INT",
+        comment: "Test value",
+        size: 2,
+        flags: 0,
+        indexGroup: 1,
+        indexOffset: 2,
+      },
+    };
+    mockState.values["MAIN.value"] = 42;
+    mockState.values["main.value"] = 42;
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    const results = await service.readMany(["MAIN.value"]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.name).toBe("MAIN.value");
+    expect(results[0]?.value).toBe(42);
+  });
+
+  it("falls back to direct readValue calls when symbols are missing from the upload cache", async () => {
+    const { AdsService } = await import("../src/ads/index.js");
+
+    mockState.symbols = {
+      "main.cached": {
+        name: "MAIN.cached",
+        type: "INT",
+        comment: "Cached test value",
+        size: 2,
+        flags: 0,
+        indexGroup: 11,
+        indexOffset: 12,
+      },
+    };
+    mockState.values["MAIN.dynamic"] = 99;
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    const results = await service.readMany(["MAIN.dynamic"]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.name).toBe("MAIN.dynamic");
+    expect(results[0]?.value).toBe(99);
   });
 });

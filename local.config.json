@@ -1,0 +1,9 @@
+{
+  "connectionMode": "router",
+  "targetAmsNetId": "192.168.1.147.1.1",
+  "targetAdsPort": 851,
+  "readOnly": true,
+  "contextSnapshotSymbols": [
+    "MAIN.L_xResetLog"
+  ]
+}

@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:local": "node ./scripts/local-dev-smoke.mjs"
   },
   "dependencies": {
     "ads-client": "^2.2.0",

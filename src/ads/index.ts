@@ -165,6 +165,7 @@ function toRawReadCommand(symbol: AdsSymbol): ReadRawMultiCommand {
 export class AdsService {
   readonly #client: Client;
   readonly #symbolCache = new Map<string, AdsSymbol>();
+  readonly #symbolLookupCache = new Map<string, AdsSymbol>();
   readonly #handleCache = new Map<string, VariableHandle>();
   readonly #watchCache = new Map<string, PlcWatchEntry>();
 
@@ -314,7 +315,26 @@ export class AdsService {
     await this.connect();
     await this.#ensureSymbolsLoaded();
 
-    const symbols = await Promise.all(names.map((name) => this.getSymbol(name)));
+    const symbolResults = await Promise.all(
+      names.map(async (name) => {
+        try {
+          return await this.getSymbol(name);
+        } catch {
+          return undefined;
+        }
+      }),
+    );
+
+    if (symbolResults.some((symbol) => symbol === undefined)) {
+      return Promise.all(
+        names.map(async (name) => {
+          const result = await this.#client.readValue(name);
+          return toReadResult(result);
+        }),
+      );
+    }
+
+    const symbols = symbolResults as AdsSymbol[];
     const commands = symbols.map((symbol) => toRawReadCommand(symbol));
     const rawResults = await this.#client.readRawMulti(commands);
     const timestamp = new Date().toISOString();
@@ -509,7 +529,7 @@ export class AdsService {
     await this.connect();
     await this.#ensureSymbolsLoaded();
 
-    const cached = this.#symbolCache.get(name);
+    const cached = this.#getCachedSymbol(name);
     if (cached) {
       return cached;
     }
@@ -573,9 +593,11 @@ export class AdsService {
   async #loadSymbolCache(): Promise<void> {
     const symbols = await this.#client.getSymbols();
     this.#symbolCache.clear();
+    this.#symbolLookupCache.clear();
 
     for (const [name, symbol] of Object.entries(symbols)) {
       this.#symbolCache.set(name, symbol);
+      this.#symbolLookupCache.set(name.trim().toLowerCase(), symbol);
     }
 
     this.#symbolsLoaded = true;
@@ -583,8 +605,18 @@ export class AdsService {
 
   #invalidateRuntimeCaches(): void {
     this.#symbolCache.clear();
+    this.#symbolLookupCache.clear();
     this.#handleCache.clear();
     this.#symbolsLoaded = false;
+  }
+
+  #getCachedSymbol(name: string): AdsSymbol | undefined {
+    const trimmedName = name.trim();
+
+    return (
+      this.#symbolCache.get(trimmedName) ??
+      this.#symbolLookupCache.get(trimmedName.toLowerCase())
+    );
   }
 
   #assertWriteAllowed(symbolName: string): void {
