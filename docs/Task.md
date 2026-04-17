@@ -1,74 +1,74 @@
-# Task Breakdown für `pi-twincat-ads`
+# Task Breakdown fuer `twincat-ads` Monorepo
 
-Diese Datei zerlegt den aktuellen Implementierungsplan in konkrete Umsetzungsschritte mit maximal zehn Tasks.
+Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspaces-Monorepo mit `core`, `pi` und `mcp`.
 
 ## Tasks
 
-### 1. Projekt-Scaffold und Package-Basis aufsetzen `[Done]`
+### 1. Neues Monorepo-Skelett aufsetzen `[Open]`
 
-- TypeScript-Package-Struktur gemäß Plan anlegen: `src/index.ts`, `src/ads/`, `src/tools/`, `src/hooks/`, `skills/twincat-ads/`.
-- `package.json`, TypeScript-Konfiguration und minimale Build-/Test-Skripte vorbereiten.
-- Extension-Entry-Point so anlegen, dass spätere Tool- und Hook-Registrierung sauber anschließbar ist.
+- Neues Repo `twincat-ads` anlegen.
+- npm-Workspaces konfigurieren.
+- TypeScript Project References fuer Root und Unterpakete aufsetzen.
+- Basisstruktur `packages/core`, `packages/pi`, `packages/mcp` anlegen.
 
-### 2. Konfigurationsmodell und Validierung implementieren `[Done]`
+### 2. `packages/pi` als lauffaehige Ausgangsbasis uebernehmen `[Open]`
 
-- Runtime-Config-Schema mit Zod anlegen.
-- Pflicht- und Optionalfelder für Router-Modus und Direkt-Modus definieren.
-- Defaults für `targetAdsPort`, `routerTcpPort` und `notificationCycleTimeMs` zentral setzen.
-- Klare Validierungsfehler für ungültige AMS-/Router-Konfigurationen ausgeben.
+- Den aktuellen Stand von `pi-twincat-ads` zunaechst nahezu 1:1 nach `packages/pi` uebernehmen.
+- Build, Tests, Skill-Datei und Pi-Manifest dort wieder gruen bekommen.
+- Sicherstellen, dass sich das Pi-Paket vor der Core-Extraktion weiterhin wie `pi-twincat-ads` verhaelt.
 
-### 3. ADS-Service mit Verbindungsmanagement bauen `[Done]`
+### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Open]`
 
-- Zentralen ADS-Service auf Basis von `ads-client` implementieren.
-- Connection-State (`disconnected`, `connecting`, `connected`, `degraded`) abbilden.
-- Connect, Disconnect, Preflight-Checks und Reconnect-Grundlogik kapseln.
-- Symbol-Upload und Basis-Metadaten-Laden an den Service hängen.
+- Festlegen, welche Teile transportagnostisch in den Core gehoeren.
+- Core-Exports definieren:
+  - Config und Validierung
+  - ADS-Service
+  - Runtime-/Controller-Schicht
+  - transportfreie Operationen wie `readSymbol`, `readMany`, `writeSymbol`, `watchSymbol`, `unwatchSymbol`, `listWatches`, `readState`, `setWriteMode`
+- Pi- und MCP-spezifische Verantwortung explizit ausserhalb des Core halten.
 
-### 4. Symbol-, Typ- und Handle-Verwaltung ergänzen `[Done]`
+### 4. Domänenlogik in `packages/core` extrahieren `[Open]`
 
-- Symboltabelle für Discovery und Kontextbereitstellung laden und cachen.
-- Handle-Cache für häufig genutzte Symbole und Writes einführen.
-- Handle-Lebensdauer und Freigabe bei Reconnect bzw. Session-Ende sauber behandeln.
-- Typ-Metadaten so aufbereiten, dass Reads, Writes und Symbol-Listen konsistent arbeiten.
+- ADS-, Cache-, Watch-, Reconnect- und Write-Safety-Logik aus dem bisherigen Paket in `packages/core` verschieben.
+- Das 3-Layer-Safety-Modell im Core verankern:
+  - `readOnly`
+  - Runtime-Write-Mode
+  - `writeAllowlist`
+- Sicherstellen, dass der Core keinerlei Pi-Hook-, Prompt- oder MCP-Protokolllogik enthaelt.
 
-### 5. Lese- und Status-Tools implementieren `[Done]`
+### 5. `packages/pi` auf den Core umstellen `[Open]`
 
-- `plc_list_symbols(filter?)`, `plc_read(name)`, `plc_read_many(names[])` und `plc_state()` implementieren.
-- `plc_read_many` intern als gebündelten Mehrfachzugriff auslegen.
-- Einheitliche Rückgabeformate mit Name, Typ, Wert, Status und Zeitstempel definieren.
-- Fehlerfälle für unbekannte Symbole und Verbindungsprobleme sauber abbilden.
+- Pi-Adapter so umbauen, dass er nur noch den Core verwendet.
+- Tool-Wrapper und Hook-Binding auf die Core-Operationen mappen.
+- Kontext-Injection, `session_start`, `context`, `tool_call` und `session_shutdown` im Pi-Paket halten.
+- Regressionen gegen den bisherigen `pi-twincat-ads`-Stand vermeiden.
 
-### 6. Schreibpfad mit Sicherheitsregeln umsetzen `[Done]`
+### 6. `twincat-ads-mcp` als v0.1-Server aufbauen `[Open]`
 
-- `plc_write(name, value)` implementieren.
-- `readOnly`-Schalter und `writeAllowlist` zentral durchsetzen.
-- Ein Runtime-Write-Gate ergänzen: Der Modus ist standardmäßig `read-only` und bleibt aktiv, bis er explizit per Command deaktiviert bzw. für Schreibzugriffe freigeschaltet wird.
-- Schreibzugriffe mit klaren Ablehnungsgründen versehen.
-- Schreibverhalten so kapseln, dass spätere Bestätigungslogik leicht anschließbar bleibt.
+- MCP-Paket mit `@modelcontextprotocol/sdk` als stdio-Server anlegen.
+- Core-Operationen als MCP-Tools exponieren.
+- Zod-/Core-Inputs sauber in JSON-Schema fuer MCP ueberfuehren.
+- Watches in v0.1 zunaechst nur als Tools, noch nicht als Resources/Subscriptions modellieren.
 
-### 7. Watch- und Notification-System aufbauen `[Done]`
+### 7. Monorepo-Build, Tests und Paketintegration vervollstaendigen `[Open]`
 
-- `plc_watch(name)` mit ADS-Notifications implementieren.
-- Default-Verhalten als `on change`, mit zyklischem Fallback über `notificationCycleTimeMs`.
-- Notification-Registrierung, lokale Zuordnung und Deregistrierung sauber verwalten.
-- Reconnect-Verhalten so bauen, dass aktive Watches automatisch neu registriert werden.
+- Root-Build ueber `tsc -b` fuer alle Pakete herstellen.
+- Tests fuer Core, Pi und MCP sauber trennen.
+- Sicherstellen, dass `packages/pi` und `packages/mcp` nur ueber `workspace:*` auf den Core zugreifen.
+- Pack-/Publish-Checks fuer alle drei Pakete ergaenzen.
 
-### 8. Hooks und Session-Lifecycle integrieren `[Done]`
+### 8. Versionierung und Release-Flows vorbereiten `[Open]`
 
-- `session_start`, `before_agent_start`, `context`, `tool_call` und `session_end` implementieren.
-- Session-Start mit Verbindungsaufbau und initialem Symbol-/Snapshot-Laden koppeln.
-- Kontext-Hook auf kompakte Snapshot-Symbole begrenzen.
-- Session-Ende für vollständiges Cleanup von Notifications, Handles und ADS-Verbindung nutzen.
+- Zunaechst lockstepped Versionierung fuer alle drei Pakete einrichten.
+- Release-Reihenfolge dokumentieren:
+  - `twincat-ads-core`
+  - `pi-twincat-ads@0.2.0`
+  - `twincat-ads-mcp@0.1.0`
+- Spaetere Umstellung auf Changesets nur vorbereiten, aber noch nicht erzwingen.
 
-### 9. Skill- und Entwicklerdokumentation erstellen `[Done]`
+### 9. Dokumentation und Migration fertigziehen `[Open]`
 
-- `skills/twincat-ads/SKILL.md` mit Tool-Nutzung, Symbolpfaden und Write-Sicherheitsregeln anlegen.
-- README um Installation, Konfiguration, ADS-Voraussetzungen und verfügbare Tools erweitern.
-- Router-Modus und Direkt-Modus verständlich dokumentieren.
-
-### 10. Tests und Smoke-Checks vervollständigen `[Done]`
-
-- Unit- und Integrationstests für Config, ADS-Service, Tool-Verhalten und Hooks anlegen.
-- Mock-basierten End-to-End-Test mit `ads-client` ergänzen.
-- Reconnect-, Handle-Cache- und Notification-Recovery-Szenarien explizit testen.
-- Manuellen Smoke-Test für TwinCAT-3-PLC auf Port `851` dokumentieren.
+- Root-README fuer das Monorepo schreiben.
+- Paket-spezifische READMEs fuer `core`, `pi` und `mcp` anlegen.
+- Migrationshinweise vom bisherigen `pi-twincat-ads`-Repo dokumentieren.
+- Konfiguration, Safety-Modell und typische Deploy-/Testpfade fuer Pi und MCP beschreiben.
