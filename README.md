@@ -21,6 +21,7 @@ The extension is implemented and currently includes:
 - `plc_read_many`
 - `plc_state`
 - `plc_set_write_mode`
+- `plc_set_target`
 - `plc_write`
 - `plc_watch`
 - `plc_unwatch`
@@ -66,35 +67,40 @@ Runtime configuration is validated with Zod.
 
 ### Pi runtime config
 
-The Pi adapter expects one of these inputs at startup:
+The Pi adapter accepts one of these inputs at startup:
 
 - `--plc-config ./plc.config.json`
 - `PI_TWINCAT_ADS_CONFIG=./plc.config.json`
 - `PI_TWINCAT_ADS_CONFIG_JSON='{"connectionMode":"router",...}'`
 
+If none of them is provided, Pi creates `./plc.config.json` automatically on first use and starts with a local default target for a TwinCAT runtime on the same machine.
+
 Typical Pi launch pattern:
 
 ```bash
-pi --plc-config ./plc.config.json
+pi
 ```
 
-Example `plc.config.json`:
+Default `plc.config.json`:
 
 ```json
 {
   "connectionMode": "router",
-  "targetAmsNetId": "192.168.1.120.1.1",
+  "targetAmsNetId": "localhost",
   "targetAdsPort": 851,
   "readOnly": true,
-  "contextSnapshotSymbols": [
-    "MAIN.someValue"
-  ]
+  "writeAllowlist": [],
+  "contextSnapshotSymbols": [],
+  "notificationCycleTimeMs": 250,
+  "maxNotifications": 128
 }
 ```
 
+To switch from the local default to a remote PLC, use the `plc_set_target` tool and persist a new remote AMS Net ID into that config file.
+
 ### Common fields
 
-- `targetAmsNetId`: target AMS Net ID
+- `targetAmsNetId`: target AMS Net ID, or `localhost` for the local TwinCAT runtime
 - `targetAdsPort`: target ADS port, default `851`
 - `readOnly`: default `true`
 - `writeAllowlist`: exact symbol names allowed for writes
@@ -104,12 +110,12 @@ Example `plc.config.json`:
 
 ### Router mode
 
-Use router mode when the host already has a compatible ADS router.
+Use router mode when the host already has a compatible ADS router. This is also the default for local same-machine setups.
 
 ```ts
 {
   connectionMode: "router",
-  targetAmsNetId: "192.168.1.120.1.1",
+  targetAmsNetId: "localhost",
   targetAdsPort: 851,
   readOnly: true
 }
@@ -145,7 +151,8 @@ Use direct mode when no local ADS router is available and the client connects di
 - In router mode, the host must have a working ADS router.
 - In direct mode, `routerAddress`, `localAmsNetId`, and `localAdsPort` must be configured correctly.
 - `targetAdsPort` usually points to a PLC runtime such as `851`.
-- Localhost scenarios depend on TwinCAT and router setup and are not assumed automatically.
+- The generated default config targets `localhost:851`, which is the expected starting point when Pi and the TwinCAT runtime run on the same machine.
+- Remote PLC access typically means keeping router mode and changing `targetAmsNetId` with `plc_set_target`, assuming the ADS route already exists.
 
 ## Safety Model
 
@@ -175,6 +182,7 @@ That means writes stay blocked until configuration allows them, the session-loca
 ### Write control
 
 - `plc_set_write_mode`: enable or disable session-local write access
+- `plc_set_target`: persist a new target AMS Net ID and optional ADS port into the active `plc.config.json`
 - `plc_write`: write a value when all safety gates allow it
 
 ### Watches

@@ -1,15 +1,25 @@
 import { z } from "zod";
 
+export const LOOPBACK_AMS_NET_ID = "127.0.0.1.1.1" as const;
+
 const amsNetIdSegmentSchema = z.coerce
   .number()
   .int()
   .min(0)
   .max(255);
 
+function isLoopbackAlias(value: string): boolean {
+  return value.trim().toLowerCase() === "localhost";
+}
+
 const amsNetIdSchema = z
   .string()
   .trim()
   .refine((value) => {
+    if (isLoopbackAlias(value)) {
+      return true;
+    }
+
     const segments = value.split(".");
     if (segments.length !== 6) {
       return false;
@@ -19,8 +29,10 @@ const amsNetIdSchema = z
       const parsed = amsNetIdSegmentSchema.safeParse(segment);
       return parsed.success;
     });
-  }, "AMS Net ID must contain six numeric segments between 0 and 255.")
-  .transform((value) => value.trim());
+  }, 'AMS Net ID must contain six numeric segments between 0 and 255 or use "localhost".')
+  .transform((value) =>
+    isLoopbackAlias(value) ? LOOPBACK_AMS_NET_ID : value.trim(),
+  );
 
 const hostSchema = z
   .string()

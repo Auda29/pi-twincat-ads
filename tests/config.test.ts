@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isWriteAllowed, normalizeExtensionConfig } from "../src/config.js";
+import {
+  isWriteAllowed,
+  LOOPBACK_AMS_NET_ID,
+  normalizeExtensionConfig,
+} from "../src/config.js";
 
 describe("config", () => {
   it("applies router-mode defaults", () => {
@@ -32,6 +36,16 @@ describe("config", () => {
         targetAmsNetId: "192.168.1.120.1",
       }),
     ).toThrow("AMS Net ID must contain six numeric segments");
+  });
+
+  it('accepts "localhost" as the local PLC target', () => {
+    const config = normalizeExtensionConfig({
+      connectionMode: "router",
+      targetAmsNetId: "localhost",
+    });
+
+    expect(config.targetAmsNetId).toBe(LOOPBACK_AMS_NET_ID);
+    expect(config.targetAdsPort).toBe(851);
   });
 
   it("rejects writeAllowlist when readOnly stays enabled", () => {

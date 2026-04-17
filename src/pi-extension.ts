@@ -1,6 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type {
   ExtensionAPI,
@@ -11,6 +8,11 @@ import type {
 import { Type, type TSchema } from "@sinclair/typebox";
 
 import { createExtension, type ExtensionConfigInput } from "./index.js";
+import {
+  persistTargetConfigUpdate,
+  resolvePiConfig,
+  type ResolvedPiConfig,
+} from "./pi-config.js";
 
 type RegisteredExtension = Awaited<ReturnType<ReturnType<typeof createExtension>["register"]>>;
 type RegisteredTool = RegisteredExtension["tools"][number];
@@ -199,38 +201,6 @@ function formatToolSuccess(toolName: string, data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 
-async function readJsonConfig(configPath: string): Promise<ExtensionConfigInput> {
-  const resolvedPath = path.resolve(process.cwd(), configPath);
-  const fileContent = await readFile(resolvedPath, "utf8");
-  return JSON.parse(fileContent) as ExtensionConfigInput;
-}
-
-async function resolvePiConfig(pi: ExtensionAPI): Promise<ExtensionConfigInput> {
-  const flagValue = pi.getFlag("plc-config");
-  if (typeof flagValue === "string" && flagValue.trim().length > 0) {
-    const trimmed = flagValue.trim();
-    if (trimmed.startsWith("{")) {
-      return JSON.parse(trimmed) as ExtensionConfigInput;
-    }
-
-    return readJsonConfig(trimmed);
-  }
-
-  const envPath = process.env.PI_TWINCAT_ADS_CONFIG?.trim();
-  if (envPath) {
-    return readJsonConfig(envPath);
-  }
-
-  const envJson = process.env.PI_TWINCAT_ADS_CONFIG_JSON?.trim();
-  if (envJson) {
-    return JSON.parse(envJson) as ExtensionConfigInput;
-  }
-
-  throw new Error(
-    "pi-twincat-ads requires a PLC config. Pass --plc-config ./plc.config.json or set PI_TWINCAT_ADS_CONFIG / PI_TWINCAT_ADS_CONFIG_JSON.",
-  );
-}
-
 async function getInternalTool(
   registration: RegisteredExtension,
   toolName: string,
@@ -263,6 +233,21 @@ type ToolSpec = {
 };
 
 const toolSpecs: ToolSpec[] = [
+  {
+    name: "plc_set_target",
+    label: "PLC Target",
+    description:
+      "Persist the target AMS Net ID and optional ADS port in the active PLC config file.",
+    parameters: Type.Object(
+      {
+        targetAmsNetId: Type.String({ minLength: 1 }),
+        targetAdsPort: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 65_535 }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
   {
     name: "plc_list_symbols",
     label: "PLC Symbols",
@@ -405,12 +390,52 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
   });
 
   let registrationPromise: Promise<RegisteredExtension> | undefined;
+  let activeResolvedConfig: ResolvedPiConfig | undefined;
+
+  const loadResolvedConfig = async (): Promise<ResolvedPiConfig> => {
+    const plcConfigFlag = pi.getFlag("plc-config");
+    const resolveOptions = {
+      cwd: process.cwd(),
+    } as {
+      cwd: string;
+      flagValue?: string;
+      envPath?: string;
+      envJson?: string;
+    };
+
+    if (typeof plcConfigFlag === "string") {
+      resolveOptions.flagValue = plcConfigFlag;
+    }
+
+    if (process.env.PI_TWINCAT_ADS_CONFIG !== undefined) {
+      resolveOptions.envPath = process.env.PI_TWINCAT_ADS_CONFIG;
+    }
+
+    if (process.env.PI_TWINCAT_ADS_CONFIG_JSON !== undefined) {
+      resolveOptions.envJson = process.env.PI_TWINCAT_ADS_CONFIG_JSON;
+    }
+
+    const resolved = await resolvePiConfig(resolveOptions);
+
+    activeResolvedConfig = resolved;
+    return resolved;
+  };
+
+  const resetRegistration = async (): Promise<void> => {
+    if (!registrationPromise) {
+      return;
+    }
+
+    const registration = await getRegistration();
+    await runHook(registration, "session_end", {});
+    registrationPromise = undefined;
+  };
 
   const getRegistration = async (): Promise<RegisteredExtension> => {
     if (!registrationPromise) {
       registrationPromise = (async () => {
-        const config = await resolvePiConfig(pi);
-        const extension = createExtension(config);
+        const resolvedConfig = await loadResolvedConfig();
+        const extension = createExtension(resolvedConfig.config);
         return extension.register();
       })().catch((error) => {
         registrationPromise = undefined;
@@ -428,6 +453,48 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
       description: spec.description,
       parameters: spec.parameters,
       async execute(toolCallId, params, _signal, _onUpdate, _ctx) {
+        if (spec.name === "plc_set_target") {
+          const resolvedConfig = activeResolvedConfig ?? (await loadResolvedConfig());
+
+          if (!resolvedConfig.configPath) {
+            throw new Error(
+              "The active PLC config was provided as inline JSON and cannot be updated persistently. Use a plc.config.json file instead.",
+            );
+          }
+
+          const input = params as {
+            targetAmsNetId: string;
+            targetAdsPort?: number;
+          };
+          const updateOptions = {
+            configPath: resolvedConfig.configPath,
+            targetAmsNetId: input.targetAmsNetId,
+          } as {
+            configPath: string;
+            targetAmsNetId: string;
+            targetAdsPort?: number;
+          };
+
+          if (input.targetAdsPort !== undefined) {
+            updateOptions.targetAdsPort = input.targetAdsPort;
+          }
+
+          const nextConfig = await persistTargetConfigUpdate(updateOptions);
+
+          await resetRegistration();
+
+          return {
+            content: textContent(
+              `Persisted PLC target ${nextConfig.targetAmsNetId}:${nextConfig.targetAdsPort} in ${resolvedConfig.configPath}.`,
+            ),
+            details: {
+              configPath: resolvedConfig.configPath,
+              targetAmsNetId: nextConfig.targetAmsNetId,
+              targetAdsPort: nextConfig.targetAdsPort,
+            },
+          };
+        }
+
         const registration = await getRegistration();
         const internalTool = await getInternalTool(registration, spec.name);
         const execute = internalTool.execute as (rawInput: unknown) => Promise<unknown>;
