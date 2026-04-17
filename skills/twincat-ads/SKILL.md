@@ -20,6 +20,33 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 - Use `plc_state` to understand runtime mode, watch count, and current write availability.
 - If hooks return `failedSnapshots`, treat that as a configuration or PLC-symbol drift hint and verify the symbol names.
 
+### Finding symbol paths
+
+- Users often describe a variable by meaning, not by its full ADS symbol path.
+- If the user says something like "check variable `xEnable` in block `FB_Axis`", do not guess the final path immediately.
+- First search with `plc_list_symbols` using narrow filters based on the most specific pieces you have:
+  - variable name such as `xEnable`
+  - block or DUT name such as `FB_Axis`
+  - program or GVL name if mentioned, such as `MAIN` or `GVL`
+- Prefer refining in small steps instead of using a very broad filter once.
+- Once matching symbols are listed, use the exact returned symbol path for `plc_read`, `plc_read_many`, `plc_watch`, or `plc_write`.
+
+Example workflow:
+
+- User says: "Check the value of variable `xResetLog` in the block `PRG_SPS_Ablauf_Anl1`."
+- First try `plc_list_symbols` with a filter like `xResetLog`.
+- If there are many matches, refine with `PRG_SPS_Ablauf_Anl1`.
+- A returned symbol might be `PRG_SPS_Ablauf_Anl1.L_xResetLog` or `PRG_SPS_Ablauf_Anl1.fbLogger.xResetLog`.
+- Then use that exact full path in `plc_read`.
+
+Heuristics for common TwinCAT naming:
+
+- Top-level program variables often look like `MAIN.someValue` or `PRG_Name.someValue`.
+- Global variables often start with a GVL name such as `GVL_System.someValue`.
+- Nested function block members often look like `MAIN.fbAxis.xEnable` or `PRG_Name.fbUnit.stStatus.xReady`.
+- Array elements can appear as `GVL.Axis[1].Cmd`.
+- Exact casing matters, especially for writes and allowlists.
+
 ### Writes
 
 - Treat every write as safety-sensitive.
