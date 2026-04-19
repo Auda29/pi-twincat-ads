@@ -1,3 +1,11 @@
+---
+name: twincat-ads
+description: >-
+  TwinCAT ADS via pi-twincat-ads (plc_state, plc_list_symbols, plc_read, plc_write,
+  plc_watch). Use when inspecting or changing TwinCAT PLC symbols, runtime state,
+  or ADS watches over a configured ADS connection.
+---
+
 # TwinCAT ADS Skill
 
 Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime values over ADS.
