@@ -1,6 +1,6 @@
 {
   "name": "pi-twincat-ads",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Pi extension for reading and writing TwinCAT runtime values over ADS.",
   "author": "Niklas W",
   "license": "MIT",
