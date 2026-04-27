@@ -46,16 +46,23 @@ The Pi and MCP packages both depend on the core package. Publishing the core
 first avoids consumers receiving package metadata that points at an unavailable
 runtime dependency.
 
-## Pi Publish Workflow
+## Package Publish Workflows
 
-`.github/workflows/publish-pi.yml` publishes `pi-twincat-ads` with npm trusted
-publishing. It can be started manually with `workflow_dispatch`, by pushing a
-`pi-v*` version tag, or by publishing a GitHub Release whose tag starts with
-`pi-v`. Configure the package's npm trusted publisher for GitHub Actions with
-repository `Auda29/twincat-mcp-mono` and workflow filename `publish-pi.yml`.
-Manual runs are always `--dry-run`; only version tags or published releases run
-the real publish step with provenance and the `next` dist-tag. Releases for
-other package tags are ignored by the Pi publish job.
+The package publish workflows use npm trusted publishing. Configure each npm
+package's trusted publisher for GitHub Actions with repository
+`Auda29/twincat-mcp-mono` and the matching workflow filename:
+
+| Package | Workflow | Release tag prefix | Default publish dist-tag |
+| --- | --- | --- | --- |
+| `twincat-mcp-core` | `publish-core.yml` | `core-v*` | `latest` |
+| `pi-twincat-ads` | `publish-pi.yml` | `pi-v*` | `next` |
+| `twincat-mcp` | `publish-mcp.yml` | `mcp-v*` | `latest` |
+
+Each workflow can be started manually with `workflow_dispatch`, by pushing a
+matching package version tag, or by publishing a GitHub Release whose tag uses
+the matching prefix. Manual runs are always `--dry-run`; only version tags or
+published releases run the real publish step with provenance. Releases for
+other package tag prefixes are ignored by each package publish job.
 
 ## Changesets Preparation
 

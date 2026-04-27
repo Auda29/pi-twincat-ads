@@ -1,0 +1,93 @@
+name: Publish Core Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag to test in dry-run"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - next
+  release:
+    types:
+      - published
+  push:
+    tags:
+      - "core-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-core-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-core:
+    name: Publish twincat-mcp-core
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'core-v') }}
+    runs-on: ubuntu-latest
+    env:
+      NPM_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'latest' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Validate Core version tag
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_NAME="${{ github.event.release.tag_name }}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if ! printf '%s\n' "$TAG_NAME" | grep -Eq '^core-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Expected a Core version tag like core-v0.2.3 or core-v0.2.3-next.0, got: $TAG_NAME" >&2
+            exit 1
+          fi
+
+          TAG_VERSION="${TAG_NAME#core-v}"
+          PACKAGE_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('packages/core/package.json', 'utf8')).version")"
+
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Core tag version $TAG_VERSION does not match packages/core/package.json version $PACKAGE_VERSION." >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check workspace integration
+        run: npm run check:workspace
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Test core package
+        run: npm run test:core
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack core package
+        run: npm run pack:core
+
+      - name: Dry-run publish Core package
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npm publish -w twincat-mcp-core --tag "$NPM_TAG" --access public --dry-run
+
+      - name: Publish Core package
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: npm publish -w twincat-mcp-core --tag "$NPM_TAG" --access public --provenance
