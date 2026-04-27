@@ -10,6 +10,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./ads-service": {
+      "types": "./dist/ads-service.d.ts",
+      "import": "./dist/ads-service.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
     }
   },
   "files": [
@@ -24,5 +36,8 @@
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.24.2"
   }
 }

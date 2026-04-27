@@ -1,1 +1,59 @@
-export const packageName = "twincat-ads-core";
+export {
+  CORE_RESPONSIBILITIES,
+  OUT_OF_CORE_RESPONSIBILITIES,
+  type CoreResponsibility,
+  type OutOfCoreResponsibility,
+} from "./boundaries.js";
+
+export {
+  DEFAULT_LOCAL_ADS_PORT,
+  DEFAULT_MAX_NOTIFICATIONS,
+  DEFAULT_NOTIFICATION_CYCLE_TIME_MS,
+  DEFAULT_PLC_ADS_PORT,
+  DEFAULT_ROUTER_TCP_PORT,
+  LOOPBACK_AMS_NET_ID,
+  adsDirectConnectionConfigSchema,
+  adsRouterConnectionConfigSchema,
+  isWriteAllowed,
+  normalizeTwinCatAdsConfig,
+  twinCatAdsConfigSchema,
+  type AdsConnectionMode,
+  type AdsDirectConnectionConfig,
+  type AdsRouterConnectionConfig,
+  type TwinCatAdsConfigInput,
+  type TwinCatAdsRuntimeConfig,
+  type WritePolicy,
+} from "./config.js";
+
+export {
+  WriteDeniedError,
+  type AdsConnectionInfo,
+  type AdsConnectionState,
+  type AdsDeviceInfo,
+  type AdsStateSnapshot,
+  type PlcReadResult,
+  type PlcStateResult,
+  type PlcSymbolSummary,
+  type PlcWatchMode,
+  type PlcWatchSnapshot,
+  type PlcWriteAccessResult,
+  type PlcWriteMode,
+  type PlcWriteModeResult,
+  type PlcWriteResult,
+  type TwinCatAdsService,
+  type WatchSymbolOptions,
+} from "./ads-service.js";
+
+export {
+  createTwinCatAdsRuntime,
+  type CreateTwinCatAdsRuntimeOptions,
+  type ListSymbolsInput,
+  type ReadManyInput,
+  type ReadSymbolInput,
+  type SetWriteModeInput,
+  type TwinCatAdsOperations,
+  type TwinCatAdsRuntime,
+  type UnwatchSymbolInput,
+  type WatchSymbolInput,
+  type WriteSymbolInput,
+} from "./runtime.js";

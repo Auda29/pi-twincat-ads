@@ -19,7 +19,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Build, Tests, Skill-Datei und Pi-Manifest dort wieder gruen bekommen.
 - Sicherstellen, dass sich das Pi-Paket vor der Core-Extraktion weiterhin wie `pi-twincat-ads` verhaelt.
 
-### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Open]`
+### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Review]`
 
 - Festlegen, welche Teile transportagnostisch in den Core gehoeren.
 - Core-Exports definieren:
