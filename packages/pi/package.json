@@ -1,9 +1,14 @@
 {
   "name": "pi-twincat-ads",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Pi extension for reading and writing TwinCAT runtime values over ADS.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Auda29/twincat-mcp-mono.git",
+    "directory": "packages/pi"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -52,7 +57,7 @@
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.67.3",
     "@sinclair/typebox": "^0.34.49",
-    "twincat-mcp-core": "0.2.2",
+    "twincat-mcp-core": "0.2.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {

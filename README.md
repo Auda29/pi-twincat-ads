@@ -149,5 +149,5 @@ publish workflow.
 
 ## Repository
 
-- Remote: [github.com/Auda29/twincat-mcp](https://github.com/Auda29/twincat-mcp)
+- Remote: [github.com/Auda29/twincat-mcp-mono](https://github.com/Auda29/twincat-mcp-mono)
 - License: [MIT](LICENSE)

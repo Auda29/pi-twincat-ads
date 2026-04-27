@@ -48,10 +48,11 @@ runtime dependency.
 
 ## Pi Publish Workflow
 
-`.github/workflows/publish-pi.yml` publishes `pi-twincat-ads` with npm. It can
-be started manually with `workflow_dispatch`, by pushing a `pi-v*` version tag,
-or by publishing a GitHub Release whose tag starts with `pi-v`. The workflow
-expects an `NPM_TOKEN` repository secret with publish rights for the package.
+`.github/workflows/publish-pi.yml` publishes `pi-twincat-ads` with npm trusted
+publishing. It can be started manually with `workflow_dispatch`, by pushing a
+`pi-v*` version tag, or by publishing a GitHub Release whose tag starts with
+`pi-v`. Configure the package's npm trusted publisher for GitHub Actions with
+repository `Auda29/twincat-mcp-mono` and workflow filename `publish-pi.yml`.
 Manual runs are always `--dry-run`; only version tags or published releases run
 the real publish step with provenance and the `next` dist-tag. Releases for
 other package tags are ignored by the Pi publish job.

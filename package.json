@@ -1,6 +1,6 @@
 {
   "name": "twincat-mcp-monorepo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Official TwinCAT MCP monorepo for ADS core, Pi extension, and MCP server packages.",
   "author": "Niklas W",
   "license": "MIT",
@@ -22,11 +22,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Auda29/twincat-mcp.git"
+    "url": "git+https://github.com/Auda29/twincat-mcp-mono.git"
   },
-  "homepage": "https://github.com/Auda29/twincat-mcp#readme",
+  "homepage": "https://github.com/Auda29/twincat-mcp-mono#readme",
   "bugs": {
-    "url": "https://github.com/Auda29/twincat-mcp/issues"
+    "url": "https://github.com/Auda29/twincat-mcp-mono/issues"
   },
   "scripts": {
     "build": "tsc -b",

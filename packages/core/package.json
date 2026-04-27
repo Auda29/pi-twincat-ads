@@ -1,9 +1,14 @@
 {
   "name": "twincat-mcp-core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Transport-agnostic TwinCAT ADS core runtime.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Auda29/twincat-mcp-mono.git",
+    "directory": "packages/core"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
