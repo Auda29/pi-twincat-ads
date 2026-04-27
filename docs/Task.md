@@ -6,14 +6,14 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 
 ## Phase 1: Monorepo, Core, Pi und MCP
 
-### 1. Neues Monorepo-Skelett aufsetzen `[Review]`
+### 1. Neues Monorepo-Skelett aufsetzen `[Done]`
 
 - Neues Repo `twincat-ads` anlegen.
 - npm-Workspaces konfigurieren.
 - TypeScript Project References fuer Root und Unterpakete aufsetzen.
 - Basisstruktur `packages/core`, `packages/pi`, `packages/mcp` anlegen.
 
-### 2. `packages/pi` als lauffaehige Ausgangsbasis uebernehmen `[Open]`
+### 2. `packages/pi` als lauffaehige Ausgangsbasis uebernehmen `[Done]`
 
 - Den aktuellen Stand von `pi-twincat-ads` zunaechst nahezu 1:1 nach `packages/pi` uebernehmen.
 - Build, Tests, Skill-Datei und Pi-Manifest dort wieder gruen bekommen.
