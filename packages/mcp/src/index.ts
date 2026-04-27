@@ -130,8 +130,15 @@ function toMcpTool(tool: McpToolDefinition): Tool {
   return mcpTool;
 }
 
+function toJsonSafeReplacer(_key: string, value: unknown): unknown {
+  return typeof value === "bigint" ? value.toString() : value;
+}
+
 function toJsonSafeValue(value: unknown): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  return JSON.parse(JSON.stringify(value, toJsonSafeReplacer)) as Record<
+    string,
+    unknown
+  >;
 }
 
 function createToolResult(value: unknown): CallToolResult {

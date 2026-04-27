@@ -6,7 +6,9 @@ import {
 } from "../src/index.js";
 import type { TwinCatAdsRuntime } from "twincat-mcp-core";
 
-function createRuntimeStub(): TwinCatAdsRuntime {
+function createRuntimeStub(
+  overrides: Partial<Record<keyof TwinCatAdsRuntime, unknown>> = {},
+): TwinCatAdsRuntime {
   const runtime = {
     connect: async () => ({ connected: true }),
     disconnect: async () => undefined,
@@ -106,7 +108,7 @@ function createRuntimeStub(): TwinCatAdsRuntime {
     }),
   };
 
-  return runtime as unknown as TwinCatAdsRuntime;
+  return { ...runtime, ...overrides } as unknown as TwinCatAdsRuntime;
 }
 
 describe("mcp tool definitions", () => {
@@ -146,6 +148,38 @@ describe("mcp tool definitions", () => {
         timestamp: "2026-01-01T00:00:00.000Z",
         symbol: { name: "MAIN.value", type: "INT" },
       },
+    });
+  });
+
+  it("serializes PLC bigint values as strings in MCP results", async () => {
+    const tools = createMcpToolDefinitions(
+      createRuntimeStub({
+        readSymbol: async ({ name }: { name: string }) => ({
+          name,
+          value: 9_223_372_036_854_775_807n,
+          type: "LINT",
+          timestamp: "2026-01-01T00:00:00.000Z",
+          symbol: { name, type: "LINT" },
+        }),
+      }),
+    );
+    const result = await callMcpTool(tools, "plc_read", {
+      name: "MAIN.large",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      result: {
+        name: "MAIN.large",
+        value: "9223372036854775807",
+        type: "LINT",
+        timestamp: "2026-01-01T00:00:00.000Z",
+        symbol: { name: "MAIN.large", type: "LINT" },
+      },
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining('"9223372036854775807"'),
     });
   });
 
