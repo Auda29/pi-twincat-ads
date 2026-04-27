@@ -1,7 +1,7 @@
 {
-  "name": "twincat-ads",
+  "name": "twincat-mcp-monorepo",
   "version": "0.2.2",
-  "description": "Monorepo for TwinCAT ADS core, Pi extension, and MCP server packages.",
+  "description": "Official TwinCAT MCP monorepo for ADS core, Pi extension, and MCP server packages.",
   "author": "Niklas W",
   "license": "MIT",
   "private": true,
@@ -22,24 +22,24 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Auda29/twincat-ads.git"
+    "url": "git+https://github.com/Auda29/twincat-mcp.git"
   },
-  "homepage": "https://github.com/Auda29/twincat-ads#readme",
+  "homepage": "https://github.com/Auda29/twincat-mcp#readme",
   "bugs": {
-    "url": "https://github.com/Auda29/twincat-ads/issues"
+    "url": "https://github.com/Auda29/twincat-mcp/issues"
   },
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
     "check:workspace": "node ./scripts/check-workspace-integration.mjs",
     "test": "npm run test:core && npm run test:pi && npm run test:mcp",
-    "test:core": "npm run test -w twincat-ads-core",
+    "test:core": "npm run test -w twincat-mcp-core",
     "test:pi": "npm run test -w pi-twincat-ads",
-    "test:mcp": "npm run test -w twincat-ads-mcp",
+    "test:mcp": "npm run test -w twincat-mcp",
     "pack:dry-run": "npm run pack:core && npm run pack:pi && npm run pack:mcp",
-    "pack:core": "npm pack --dry-run -w twincat-ads-core",
+    "pack:core": "npm pack --dry-run -w twincat-mcp-core",
     "pack:pi": "npm pack --dry-run -w pi-twincat-ads",
-    "pack:mcp": "npm pack --dry-run -w twincat-ads-mcp",
+    "pack:mcp": "npm pack --dry-run -w twincat-mcp",
     "smoke:local": "npm run smoke:local -w pi-twincat-ads --",
     "prepublishOnly": "npm run check && npm run check:workspace && npm test && npm run build && npm run pack:dry-run"
   },

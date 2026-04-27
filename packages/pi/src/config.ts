@@ -9,4 +9,4 @@ export {
   type ExtensionConfigInput,
   type ExtensionRuntimeConfig,
   type WritePolicy,
-} from "twincat-ads-core";
+} from "twincat-mcp-core";

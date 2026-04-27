@@ -6,7 +6,7 @@
     "tsBuildInfoFile": "../../.cache/tsbuildinfo/pi.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
-      "twincat-ads-core": ["../core/src/index.ts"]
+      "twincat-mcp-core": ["../core/src/index.ts"]
     }
   },
   "references": [

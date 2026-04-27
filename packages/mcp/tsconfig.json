@@ -3,7 +3,11 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "../../.cache/tsbuildinfo/mcp.tsbuildinfo"
+    "tsBuildInfoFile": "../../.cache/tsbuildinfo/mcp.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "twincat-mcp-core": ["../core/src/index.ts"]
+    }
   },
   "references": [
     { "path": "../core" }

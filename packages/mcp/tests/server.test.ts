@@ -4,7 +4,7 @@ import {
   callMcpTool,
   createMcpToolDefinitions,
 } from "../src/index.js";
-import type { TwinCatAdsRuntime } from "twincat-ads-core";
+import type { TwinCatAdsRuntime } from "twincat-mcp-core";
 
 function createRuntimeStub(): TwinCatAdsRuntime {
   const runtime = {

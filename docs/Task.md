@@ -1,6 +1,6 @@
-# Task Breakdown fuer `twincat-ads` Monorepo
+# Task Breakdown fuer `twincat-mcp` Monorepo
 
-Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspaces-Monorepo mit `core`, `pi` und `mcp`.
+Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in das offizielle `twincat-mcp` npm-workspaces-Monorepo mit `core`, `pi` und `mcp`.
 
 ## Tasks
 
@@ -8,7 +8,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 
 ### 1. Neues Monorepo-Skelett aufsetzen `[Done]`
 
-- Neues Repo `twincat-ads` anlegen.
+- Neues Repo `twincat-mcp` anlegen.
 - npm-Workspaces konfigurieren.
 - TypeScript Project References fuer Root und Unterpakete aufsetzen.
 - Basisstruktur `packages/core`, `packages/pi`, `packages/mcp` anlegen.
@@ -19,7 +19,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Build, Tests, Skill-Datei und Pi-Manifest dort wieder gruen bekommen.
 - Sicherstellen, dass sich das Pi-Paket vor der Core-Extraktion weiterhin wie `pi-twincat-ads` verhaelt.
 
-### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Done]`
+### 3. `twincat-mcp-core` API und Paketgrenzen definieren `[Done]`
 
 - Festlegen, welche Teile transportagnostisch in den Core gehoeren.
 - Core-Exports definieren:
@@ -45,7 +45,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Kontext-Injection, `session_start`, `context`, `tool_call` und `session_shutdown` im Pi-Paket halten.
 - Regressionen gegen den bisherigen `pi-twincat-ads`-Stand vermeiden.
 
-### 6. `twincat-ads-mcp` als v0.1-Server aufbauen `[Done]`
+### 6. `twincat-mcp` als v0.1-Server aufbauen `[Done]`
 
 - MCP-Paket mit `@modelcontextprotocol/sdk` als stdio-Server anlegen.
 - Core-Operationen als MCP-Tools exponieren.
@@ -56,19 +56,19 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 
 - Root-Build ueber `tsc -b` fuer alle Pakete herstellen.
 - Tests fuer Core, Pi und MCP sauber trennen.
-- Sicherstellen, dass `packages/pi` und `packages/mcp` nur ueber `workspace:*` auf den Core zugreifen.
+- Sicherstellen, dass `packages/pi` und `packages/mcp` nur ueber die versionierte Core-Paketdependency auf den Core zugreifen.
 - Pack-/Publish-Checks fuer alle drei Pakete ergaenzen.
 
 ### 8. Versionierung und Release-Flows vorbereiten `[Done]`
 
 - Zunaechst lockstepped Versionierung fuer alle drei Pakete einrichten.
 - Release-Reihenfolge dokumentieren:
-  - `twincat-ads-core`
+  - `twincat-mcp-core`
   - `pi-twincat-ads@next`
-  - `twincat-ads-mcp@0.1.0`
+  - `twincat-mcp@0.1.0`
 - Spaetere Umstellung auf Changesets nur vorbereiten, aber noch nicht erzwingen.
 
-### 9. Dokumentation und Migration fertigziehen `[Open]`
+### 9. Dokumentation und Migration fertigziehen `[Done]`
 
 - Root-README fuer das Monorepo schreiben.
 - Paket-spezifische READMEs fuer `core`, `pi` und `mcp` anlegen.

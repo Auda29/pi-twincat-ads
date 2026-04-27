@@ -1,87 +1,41 @@
-# pi-twincat-ads
+# twincat-mcp
 
-Pi extension for reading and writing TwinCAT runtime values over ADS.
+Official TwinCAT MCP monorepo for ADS-backed packages:
 
-## Status
+- `twincat-mcp-core`: transport-agnostic ADS runtime and safety model
+- `pi-twincat-ads`: Pi extension package backed by the core runtime
+- `twincat-mcp`: MCP stdio server backed by the core runtime
 
-The extension is implemented and currently includes:
+The packages share one TypeScript workspace and one ADS domain layer. Protocol
+adapters stay thin: Pi owns lifecycle hooks and context injection, MCP owns MCP
+tool registration and stdio transport, and the core owns ADS operations.
 
-- an ADS service with connection management, reconnect handling, symbol and handle caches
-- read, watch, and write tools with schema validation
-- hook-based session lifecycle integration
-- a three-layer write safety model
-- automated tests and a manual smoke-test guide
+## Packages
 
-## Features
+| Package | Path | Purpose |
+| --- | --- | --- |
+| `twincat-mcp-core` | `packages/core` | Config validation, `AdsService`, runtime operations, watches, write gates |
+| `pi-twincat-ads` | `packages/pi` | Pi extension, tools, hooks, skill bundle, local smoke runner |
+| `twincat-mcp` | `packages/mcp` | MCP stdio server exposing the same core PLC operations as tools |
 
-### Tools
-
-- `plc_list_symbols`
-- `plc_read`
-- `plc_read_many`
-- `plc_state`
-- `plc_set_write_mode`
-- `plc_set_target`
-- `plc_write`
-- `plc_watch`
-- `plc_unwatch`
-- `plc_list_watches`
-
-### Hooks
-
-- `session_start`
-- `before_agent_start`
-- `context`
-- `tool_call`
-- `session_end`
-
-## Installation
-
-### As a Pi package
-
-Build and publish or pack the package, then install it into Pi:
+## Workspace Commands
 
 ```bash
-pi install npm:pi-twincat-ads
-```
-
-The package ships a Pi manifest in `package.json` and registers:
-
-- the extension entry at `./dist/pi-extension.js`
-- the bundled skill directory at `./skills`
-
-Pi discovers the extension from the manifest and loads it automatically.
-
-### For local development
-
-```bash
-npm install
+npm run check
+npm run check:workspace
+npm test
 npm run build
+npm run pack:dry-run
 ```
 
-The package also exports `createExtension()` for direct local/dev integration outside a Pi host.
+The root test command runs Core, Pi, and MCP tests separately. The workspace
+check verifies internal Core dependencies stay on the matching package version.
+`pack:dry-run` validates package contents for all three published packages.
 
 ## Configuration
 
-Runtime configuration is validated with Zod.
-
-### Pi runtime config
-
-The Pi adapter accepts one of these inputs at startup:
-
-- `--plc-config ./plc.config.json`
-- `PI_TWINCAT_ADS_CONFIG=./plc.config.json`
-- `PI_TWINCAT_ADS_CONFIG_JSON='{"connectionMode":"router",...}'`
-
-If none of them is provided, Pi creates `./plc.config.json` automatically on first use and starts with a local default target for a TwinCAT runtime on the same machine.
-
-Typical Pi launch pattern:
-
-```bash
-pi
-```
-
-Default `plc.config.json`:
+All packages use the same core runtime config. Router mode is the default and is
+the usual choice when the host already has a working ADS router:
 
 ```json
 {
@@ -96,155 +50,104 @@ Default `plc.config.json`:
 }
 ```
 
-To switch from the local default to a remote PLC, use the `plc_set_target` tool and persist a new remote AMS Net ID into that config file.
+Direct mode is available when no local ADS router is available and the client
+connects directly to the PLC or router endpoint:
 
-### Common fields
+```json
+{
+  "connectionMode": "direct",
+  "targetAmsNetId": "192.168.1.120.1.1",
+  "targetAdsPort": 851,
+  "routerAddress": "192.168.1.120",
+  "routerTcpPort": 48898,
+  "localAmsNetId": "192.168.1.50.1.1",
+  "localAdsPort": 32000,
+  "readOnly": true,
+  "writeAllowlist": []
+}
+```
 
-- `targetAmsNetId`: target AMS Net ID, or `localhost` for the local TwinCAT runtime
-- `targetAdsPort`: target ADS port, default `851`
-- `readOnly`: default `true`
+Common fields:
+
+- `targetAmsNetId`: target AMS Net ID, or `localhost` for loopback
+- `targetAdsPort`: PLC runtime ADS port, usually `851`
+- `readOnly`: config-level write gate, defaults to `true`
 - `writeAllowlist`: exact symbol names allowed for writes
-- `contextSnapshotSymbols`: symbols read by lifecycle hooks for agent context
-- `notificationCycleTimeMs`: default notification cycle time, default `250`
+- `contextSnapshotSymbols`: symbols read for Pi lifecycle context
+- `notificationCycleTimeMs`: default watch cycle time, default `250`
 - `maxNotifications`: local notification cap, default `128`
-
-### Router mode
-
-Use router mode when the host already has a compatible ADS router. This is also the default for local same-machine setups.
-
-```ts
-{
-  connectionMode: "router",
-  targetAmsNetId: "localhost",
-  targetAdsPort: 851,
-  readOnly: true
-}
-```
-
-Optional router-mode fields:
-
-- `routerAddress`
-- `routerTcpPort`
-- `localAmsNetId`
-- `localAdsPort`
-
-### Direct mode
-
-Use direct mode when no local ADS router is available and the client connects directly to the PLC or router endpoint.
-
-```ts
-{
-  connectionMode: "direct",
-  targetAmsNetId: "192.168.1.120.1.1",
-  targetAdsPort: 851,
-  routerAddress: "192.168.1.120",
-  routerTcpPort: 48898,
-  localAmsNetId: "192.168.1.50.1.1",
-  localAdsPort: 32000,
-  readOnly: true
-}
-```
-
-## ADS Prerequisites
-
-- An AMS route must exist between client and PLC or router.
-- In router mode, the host must have a working ADS router.
-- In direct mode, `routerAddress`, `localAmsNetId`, and `localAdsPort` must be configured correctly.
-- `targetAdsPort` usually points to a PLC runtime such as `851`.
-- The generated default config targets `localhost:851`, which is the expected starting point when Pi and the TwinCAT runtime run on the same machine.
-- Remote PLC access typically means keeping router mode and changing `targetAmsNetId` with `plc_set_target`, assuming the ADS route already exists.
 
 ## Safety Model
 
-Writes are protected by three layers:
+Writes are blocked unless all three gates allow them:
 
-1. Config gate: `readOnly`
-2. Runtime gate: `plc_set_write_mode`
-3. Symbol gate: `writeAllowlist`
+1. Config gate: `readOnly` must be `false`.
+2. Runtime gate: write mode must be switched to `enabled`.
+3. Symbol gate: the exact symbol name must be listed in `writeAllowlist`.
 
-Important defaults:
+The safe default is read-only everywhere. Read tools, state tools, and watches
+remain available while writes stay blocked.
 
-- `readOnly` defaults to `true`
-- runtime write mode defaults to `read-only`
-- `writeAllowlist` uses exact, case-sensitive symbol name matches
+## Pi Usage
 
-That means writes stay blocked until configuration allows them, the session-local write mode is explicitly switched to `enabled`, and the symbol is allowlisted.
-
-## Tool Summary
-
-### Read and discovery
-
-- `plc_list_symbols`: list available symbols with metadata
-- `plc_read`: read one symbol
-- `plc_read_many`: bundled multi-read using ADS raw multi-read
-- `plc_state`: inspect connection state, PLC runtime state, write mode, write policy, and watch count
-
-### Write control
-
-- `plc_set_write_mode`: enable or disable session-local write access
-- `plc_set_target`: persist a new target AMS Net ID and optional ADS port into the active `plc.config.json`
-- `plc_write`: write a value when all safety gates allow it
-
-### Watches
-
-- `plc_watch`: register or reuse a PLC notification
-- `plc_unwatch`: remove a registered watch idempotently
-- `plc_list_watches`: inspect active session watches
-
-Watches keep local metadata such as mode, cycle time, notification handle, and the latest received value and timestamp. Initial `latestData` from ADS is preserved when available, and reconnect handling rebinds active watches automatically.
-
-## Hook Behavior
-
-In the packaged Pi adapter, the internal hooks are bound to real Pi lifecycle events.
-
-### `session_start`
-
-- connects to ADS
-- warms symbol and data type caches
-- reads configured snapshot symbols
-- returns `failedSnapshots` for symbols that could not be read
-
-### `before_agent_start`
-
-- returns a compact startup summary with state, snapshots, failed snapshots, and active watches
-
-### `context`
-
-- injects configured snapshot values
-- includes `failedSnapshots`, current watch count, and write mode state
-
-### `tool_call`
-
-- pre-evaluates write access for `plc_write`
-- blocks enabling runtime writes when config keeps `readOnly=true`
-- leaves defensive `plc_set_write_mode("read-only")` calls allowed
-
-### `session_end`
-
-- disconnects ADS
-- releases notifications, handles, and connection state
-
-In Pi this cleanup is triggered from `session_shutdown`.
-
-## Verification
-
-Useful commands:
+Install the Pi package after it has been published or packed:
 
 ```bash
-npm run check
-npm run build
-npm test
+pi install npm:pi-twincat-ads
 ```
 
-The current automated suite covers config validation, connection deduplication, write gates, handle caching, watch lifecycle, reconnect rebinds, tool behavior, and hook behavior. For live verification against a PLC, see [docs/manual-smoke-test.md](docs/manual-smoke-test.md).
+The Pi package registers `./dist/pi-extension.js` and the bundled
+`./skills/twincat-ads` skill directory. It accepts configuration through:
 
-For a direct local PLC test without a Pi host instance, see [docs/local-dev-test.md](docs/local-dev-test.md).
+- `--plc-config ./plc.config.json`
+- `PI_TWINCAT_ADS_CONFIG=./plc.config.json`
+- `PI_TWINCAT_ADS_CONFIG_JSON='{"connectionMode":"router",...}'`
+
+For live local checks without a Pi host, use the built package smoke runner:
+
+```bash
+npm run smoke:local -- --config ./local.config.json --symbol MAIN.someValue --watch-symbol MAIN.someValue
+```
+
+See `packages/pi/README.md`, `docs/local-dev-test.md`, and
+`docs/manual-smoke-test.md` for the full Pi flow.
+
+## MCP Usage
+
+Run the MCP server after build or install:
+
+```bash
+twincat-mcp --config ./plc.config.json
+```
+
+Config can also be supplied with `TWINCAT_ADS_CONFIG` or environment variables
+such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP v0.1 exposes PLC operations as
+tools. Watches are modeled as normal tools, not as MCP resources or
+subscriptions yet.
+
+See `packages/mcp/README.md` for tool names and configuration details.
+
+## Migration
+
+The former single-package `pi-twincat-ads` layout has been split into Core, Pi,
+and MCP packages. Existing Pi users should keep installing `pi-twincat-ads`;
+the package now depends on `twincat-mcp-core` internally. New non-Pi consumers
+should use `twincat-mcp-core` directly or run `twincat-mcp`.
+
+See `docs/migration.md` for package mapping and behavior notes.
+
+## Release
+
+Release order:
+
+1. `twincat-mcp-core`
+2. `pi-twincat-ads@next`
+3. `twincat-mcp@0.1.0`
+
+See `docs/release-flow.md` for publish checks, version policy, and the Pi npm
+publish workflow.
 
 ## Repository
 
-- **Remote:** [github.com/Auda29/pi-twincat-ads](https://github.com/Auda29/pi-twincat-ads)
-- **License:** [MIT](LICENSE)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+- Remote: [github.com/Auda29/twincat-mcp](https://github.com/Auda29/twincat-mcp)
+- License: [MIT](LICENSE)

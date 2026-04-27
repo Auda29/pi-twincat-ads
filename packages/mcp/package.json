@@ -1,5 +1,5 @@
 {
-  "name": "twincat-ads-mcp",
+  "name": "twincat-mcp",
   "version": "0.1.0",
   "description": "MCP stdio server for TwinCAT ADS operations.",
   "license": "MIT",
@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "twincat-ads-mcp": "./dist/index.js"
+    "twincat-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -26,13 +26,11 @@
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
-    "test": "vitest run",
-    "prepack": "node ../../scripts/pack-workspace-manifest.mjs prepare",
-    "postpack": "node ../../scripts/pack-workspace-manifest.mjs restore"
+    "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "twincat-ads-core": "workspace:*",
+    "twincat-mcp-core": "0.2.2",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.25.2"
   }

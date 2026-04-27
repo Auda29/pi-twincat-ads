@@ -9,7 +9,7 @@ import {
   type PlcWatchSnapshot,
   type PlcWriteModeResult,
   type TwinCatAdsRuntime,
-} from "twincat-ads-core";
+} from "twincat-mcp-core";
 
 const symbolNameSchema = z
   .string()

@@ -1,5 +1,5 @@
 import { AdsService, type AdsServiceDependencies } from "./ads/index.js";
-import { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-ads-core";
+import { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-mcp-core";
 import {
   normalizeExtensionConfig,
   type ExtensionConfigInput,
@@ -102,7 +102,7 @@ export {
   type ToolExecutionResult,
 } from "./tools/index.js";
 
-export { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-ads-core";
+export { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-mcp-core";
 
 export {
   createHookDefinitions,

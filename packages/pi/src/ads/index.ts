@@ -16,4 +16,4 @@ export {
   type PlcWriteResult,
   type TwinCatAdsService,
   type WatchSymbolOptions,
-} from "twincat-ads-core";
+} from "twincat-mcp-core";

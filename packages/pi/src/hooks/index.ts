@@ -5,7 +5,7 @@ import type {
   PlcStateResult,
   PlcWriteModeResult,
   TwinCatAdsRuntime,
-} from "twincat-ads-core";
+} from "twincat-mcp-core";
 import type { ExtensionRuntimeConfig } from "../config.js";
 
 const emptyInputSchema = z.object({}).strict();

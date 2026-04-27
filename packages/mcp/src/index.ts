@@ -20,11 +20,11 @@ import {
   type AdsServiceDependencies,
   type TwinCatAdsConfigInput,
   type TwinCatAdsRuntime,
-} from "twincat-ads-core";
+} from "twincat-mcp-core";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-export const packageName = "twincat-ads-mcp";
+export const packageName = "twincat-mcp";
 export const packageVersion = "0.1.0";
 
 const symbolNameSchema = z
@@ -389,7 +389,7 @@ export function createMcpServer(runtime: TwinCatAdsRuntime): Server {
         tools: {},
       },
       instructions:
-        "TwinCAT ADS MCP server exposing PLC operations backed by twincat-ads-core.",
+        "TwinCAT ADS MCP server exposing PLC operations backed by twincat-mcp-core.",
     },
   );
 

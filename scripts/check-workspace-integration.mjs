@@ -27,7 +27,7 @@ function expect(condition, message) {
   }
 }
 
-for (const workspaceName of ["twincat-ads-core", "pi-twincat-ads"]) {
+for (const workspaceName of ["twincat-mcp-core", "pi-twincat-ads"]) {
   const workspace = packages.get(workspaceName);
   expect(
     workspace?.manifest.version === rootPackage.version,
@@ -35,21 +35,22 @@ for (const workspaceName of ["twincat-ads-core", "pi-twincat-ads"]) {
   );
 }
 
-for (const consumerName of ["pi-twincat-ads", "twincat-ads-mcp"]) {
+for (const consumerName of ["pi-twincat-ads", "twincat-mcp"]) {
   const consumer = packages.get(consumerName);
+  const core = packages.get("twincat-mcp-core");
   const dependencyVersion =
-    consumer?.manifest.dependencies?.["twincat-ads-core"];
+    consumer?.manifest.dependencies?.["twincat-mcp-core"];
 
   expect(
-    dependencyVersion === "workspace:*",
-    `${consumerName} must depend on twincat-ads-core via workspace:* before publish rewriting.`,
+    dependencyVersion === core?.manifest.version,
+    `${consumerName} must depend on twincat-mcp-core at version ${core?.manifest.version}.`,
   );
 }
 
-const mcpVersion = packages.get("twincat-ads-mcp")?.manifest.version;
+const mcpVersion = packages.get("twincat-mcp")?.manifest.version;
 expect(
   mcpVersion === "0.1.0",
-  "twincat-ads-mcp remains at 0.1.0 for the first MCP server release.",
+  "twincat-mcp remains at 0.1.0 for the first MCP server release.",
 );
 
 if (failures.length > 0) {
