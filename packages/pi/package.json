@@ -47,12 +47,14 @@
     "check": "tsc -b --pretty false",
     "test": "vitest run",
     "smoke:local": "node ./scripts/local-dev-smoke.mjs",
+    "prepack": "node ../../scripts/pack-workspace-manifest.mjs prepare",
+    "postpack": "node ../../scripts/pack-workspace-manifest.mjs restore",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.67.3",
     "@sinclair/typebox": "^0.34.49",
-    "twincat-ads-core": "0.2.2",
+    "twincat-ads-core": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {

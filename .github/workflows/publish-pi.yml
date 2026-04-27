@@ -1,0 +1,133 @@
+name: Publish Pi Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag to test in dry-run"
+        required: true
+        default: "next"
+        type: choice
+        options:
+          - next
+          - latest
+  release:
+    types:
+      - published
+  push:
+    tags:
+      - "pi-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-pi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-pi:
+    name: Publish pi-twincat-ads
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'pi-v') }}
+    runs-on: ubuntu-latest
+    env:
+      NPM_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'next' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Validate Pi version tag
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_NAME="${{ github.event.release.tag_name }}"
+          else
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+
+          if ! printf '%s\n' "$TAG_NAME" | grep -Eq '^pi-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Expected a Pi version tag like pi-v0.2.2 or pi-v0.2.2-next.0, got: $TAG_NAME" >&2
+            exit 1
+          fi
+
+          TAG_VERSION="${TAG_NAME#pi-v}"
+          PACKAGE_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('packages/pi/package.json', 'utf8')).version")"
+
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Pi tag version $TAG_VERSION does not match packages/pi/package.json version $PACKAGE_VERSION." >&2
+            exit 1
+          fi
+
+      - name: Prepare manifests for npm ci
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const core = JSON.parse(readFileSync("packages/core/package.json", "utf8"));
+          const internalVersion = core.version;
+          const packageFiles = [
+            "packages/pi/package.json",
+            "packages/mcp/package.json",
+          ];
+
+          for (const file of packageFiles) {
+            const manifest = JSON.parse(readFileSync(file, "utf8"));
+            if (manifest.dependencies?.["twincat-ads-core"] === "workspace:*") {
+              manifest.dependencies["twincat-ads-core"] = internalVersion;
+              writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+            }
+          }
+
+          const lockfile = JSON.parse(readFileSync("package-lock.json", "utf8"));
+          for (const key of ["packages/pi", "packages/mcp"]) {
+            const dependencies = lockfile.packages?.[key]?.dependencies;
+            if (dependencies?.["twincat-ads-core"] === "workspace:*") {
+              dependencies["twincat-ads-core"] = internalVersion;
+            }
+          }
+          writeFileSync("package-lock.json", `${JSON.stringify(lockfile, null, 2)}\n`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Restore source workspace manifests
+        run: git checkout -- package-lock.json packages/pi/package.json packages/mcp/package.json
+
+      - name: Verify core is published
+        run: |
+          CORE_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('packages/core/package.json', 'utf8')).version")"
+          npm view "twincat-ads-core@${CORE_VERSION}" version
+
+      - name: Check workspace integration
+        run: npm run check:workspace
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Test core and Pi packages
+        run: npm run test:core && npm run test:pi
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack core and Pi packages
+        run: npm run pack:core && npm run pack:pi
+
+      - name: Dry-run publish Pi package
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: npm publish -w pi-twincat-ads --tag "$NPM_TAG" --access public --dry-run
+
+      - name: Publish Pi package
+        if: ${{ github.event_name != 'workflow_dispatch' }}
+        run: npm publish -w pi-twincat-ads --tag "$NPM_TAG" --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

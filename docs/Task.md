@@ -52,14 +52,14 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Zod-/Core-Inputs sauber in JSON-Schema fuer MCP ueberfuehren.
 - Watches in v0.1 zunaechst nur als Tools, noch nicht als Resources/Subscriptions modellieren.
 
-### 7. Monorepo-Build, Tests und Paketintegration vervollstaendigen `[Open]`
+### 7. Monorepo-Build, Tests und Paketintegration vervollstaendigen `[Done]`
 
 - Root-Build ueber `tsc -b` fuer alle Pakete herstellen.
 - Tests fuer Core, Pi und MCP sauber trennen.
 - Sicherstellen, dass `packages/pi` und `packages/mcp` nur ueber `workspace:*` auf den Core zugreifen.
 - Pack-/Publish-Checks fuer alle drei Pakete ergaenzen.
 
-### 8. Versionierung und Release-Flows vorbereiten `[Open]`
+### 8. Versionierung und Release-Flows vorbereiten `[Done]`
 
 - Zunaechst lockstepped Versionierung fuer alle drei Pakete einrichten.
 - Release-Reihenfolge dokumentieren:

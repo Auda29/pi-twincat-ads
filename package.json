@@ -31,9 +31,17 @@
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
-    "test": "npm run test -w twincat-ads-core && npm run test -w pi-twincat-ads",
+    "check:workspace": "node ./scripts/check-workspace-integration.mjs",
+    "test": "npm run test:core && npm run test:pi && npm run test:mcp",
+    "test:core": "npm run test -w twincat-ads-core",
+    "test:pi": "npm run test -w pi-twincat-ads",
+    "test:mcp": "npm run test -w twincat-ads-mcp",
+    "pack:dry-run": "npm run pack:core && npm run pack:pi && npm run pack:mcp",
+    "pack:core": "npm pack --dry-run -w twincat-ads-core",
+    "pack:pi": "npm pack --dry-run -w pi-twincat-ads",
+    "pack:mcp": "npm pack --dry-run -w twincat-ads-mcp",
     "smoke:local": "npm run smoke:local -w pi-twincat-ads --",
-    "prepublishOnly": "npm run check && npm test && npm run build"
+    "prepublishOnly": "npm run check && npm run check:workspace && npm test && npm run build && npm run pack:dry-run"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "^0.67.3",

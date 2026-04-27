@@ -26,11 +26,13 @@
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node ../../scripts/pack-workspace-manifest.mjs prepare",
+    "postpack": "node ../../scripts/pack-workspace-manifest.mjs restore"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "twincat-ads-core": "0.2.2",
+    "twincat-ads-core": "workspace:*",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.25.2"
   }
