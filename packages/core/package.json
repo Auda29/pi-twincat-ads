@@ -38,6 +38,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "ads-client": "^2.2.0",
     "zod": "^3.24.2"
   }
 }

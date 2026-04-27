@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import process from "node:process";
 import { createExtension } from "../dist/index.js";
 
@@ -67,7 +68,11 @@ async function loadConfig(configPath) {
     );
   }
 
-  const rawConfig = await readFile(configPath, "utf8");
+  const callerCwd = process.env.INIT_CWD ?? process.cwd();
+  const resolvedConfigPath = isAbsolute(configPath)
+    ? configPath
+    : resolve(callerCwd, configPath);
+  const rawConfig = await readFile(resolvedConfigPath, "utf8");
   return JSON.parse(rawConfig);
 }
 

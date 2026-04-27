@@ -3,7 +3,11 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "../../.cache/tsbuildinfo/pi.tsbuildinfo"
+    "tsBuildInfoFile": "../../.cache/tsbuildinfo/pi.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "twincat-ads-core": ["../core/src/index.ts"]
+    }
   },
   "references": [
     { "path": "../core" }

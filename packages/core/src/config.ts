@@ -7,7 +7,11 @@ export const DEFAULT_LOCAL_ADS_PORT = 32_000 as const;
 export const DEFAULT_NOTIFICATION_CYCLE_TIME_MS = 250 as const;
 export const DEFAULT_MAX_NOTIFICATIONS = 128 as const;
 
-const amsNetIdSegmentSchema = z.coerce.number().int().min(0).max(255);
+const amsNetIdSegmentSchema = z.coerce
+  .number()
+  .int()
+  .min(0)
+  .max(255);
 
 function isLoopbackAlias(value: string): boolean {
   return value.trim().toLowerCase() === "localhost";
@@ -26,7 +30,10 @@ const amsNetIdSchema = z
       return false;
     }
 
-    return segments.every((segment) => amsNetIdSegmentSchema.safeParse(segment).success);
+    return segments.every((segment) => {
+      const parsed = amsNetIdSegmentSchema.safeParse(segment);
+      return parsed.success;
+    });
   }, 'AMS Net ID must contain six numeric segments between 0 and 255 or use "localhost".')
   .transform((value) =>
     isLoopbackAlias(value) ? LOOPBACK_AMS_NET_ID : value.trim(),
@@ -42,12 +49,12 @@ const adsPortSchema = z
   .number()
   .int()
   .min(1, "ADS port must be greater than zero.")
-  .max(65_535, "ADS port must be 65535 or lower.");
+    .max(65_535, "ADS port must be 65535 or lower.");
 
 const symbolPathSchema = z
   .string()
   .trim()
-  .min(1, "Symbol path must not be empty.")
+  .min(1, "Allowlist entries must not be empty.")
   .transform((value) => value.trim());
 
 const commonConfigSchema = z.object({
@@ -121,6 +128,8 @@ export type TwinCatAdsRouterConfigInput = Omit<
 export type TwinCatAdsConfigInput =
   | TwinCatAdsRouterConfigInput
   | z.input<typeof adsDirectConnectionConfigSchema>;
+export type ExtensionRuntimeConfig = TwinCatAdsRuntimeConfig;
+export type ExtensionConfigInput = TwinCatAdsConfigInput;
 export type WritePolicy = Pick<
   TwinCatAdsRuntimeConfig,
   "readOnly" | "writeAllowlist"
@@ -140,6 +149,12 @@ export function normalizeTwinCatAdsConfig(
   return twinCatAdsConfigSchema.parse(normalizedInput);
 }
 
+export function normalizeExtensionConfig(
+  input: ExtensionConfigInput,
+): ExtensionRuntimeConfig {
+  return normalizeTwinCatAdsConfig(input);
+}
+
 export function isWriteAllowed(
   config: WritePolicy,
   symbolName: string,
@@ -150,3 +165,5 @@ export function isWriteAllowed(
 
   return config.writeAllowlist.includes(symbolName.trim());
 }
+
+export { twinCatAdsConfigSchema as extensionConfigSchema };

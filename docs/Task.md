@@ -19,7 +19,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Build, Tests, Skill-Datei und Pi-Manifest dort wieder gruen bekommen.
 - Sicherstellen, dass sich das Pi-Paket vor der Core-Extraktion weiterhin wie `pi-twincat-ads` verhaelt.
 
-### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Review]`
+### 3. `twincat-ads-core` API und Paketgrenzen definieren `[Done]`
 
 - Festlegen, welche Teile transportagnostisch in den Core gehoeren.
 - Core-Exports definieren:
@@ -29,7 +29,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
   - transportfreie Operationen wie `readSymbol`, `readMany`, `writeSymbol`, `watchSymbol`, `unwatchSymbol`, `listWatches`, `readState`, `setWriteMode`
 - Pi- und MCP-spezifische Verantwortung explizit ausserhalb des Core halten.
 
-### 4. Domänenlogik in `packages/core` extrahieren `[Open]`
+### 4. Domänenlogik in `packages/core` extrahieren `[Done]`
 
 - ADS-, Cache-, Watch-, Reconnect- und Write-Safety-Logik aus dem bisherigen Paket in `packages/core` verschieben.
 - Das 3-Layer-Safety-Modell im Core verankern:

@@ -265,7 +265,7 @@ describe("AdsService", () => {
   });
 
   it("deduplicates concurrent connect calls", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -284,7 +284,7 @@ describe("AdsService", () => {
   });
 
   it("enforces the runtime write gate before writing", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -307,7 +307,7 @@ describe("AdsService", () => {
   });
 
   it("reuses handles and releases them", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -331,7 +331,7 @@ describe("AdsService", () => {
   });
 
   it("registers, lists, and idempotently removes watches", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -359,7 +359,7 @@ describe("AdsService", () => {
   });
 
   it("rebinds watch subscriptions after reconnect", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -401,7 +401,7 @@ describe("AdsService", () => {
   });
 
   it("evaluates write access across all gate states", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const readOnlyService = new AdsService({
       connectionMode: "router",
@@ -444,7 +444,7 @@ describe("AdsService", () => {
   });
 
   it("reads many symbols via raw multi read", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     const service = new AdsService({
       connectionMode: "router",
@@ -466,7 +466,7 @@ describe("AdsService", () => {
   });
 
   it("resolves symbols case-insensitively for raw multi read", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     mockState.symbols = {
       "main.value": {
@@ -501,7 +501,7 @@ describe("AdsService", () => {
   });
 
   it("falls back to direct readValue calls when symbols are missing from the upload cache", async () => {
-    const { AdsService } = await import("../src/ads/index.js");
+    const { AdsService } = await import("../src/ads-service.js");
 
     mockState.symbols = {
       "main.cached": {

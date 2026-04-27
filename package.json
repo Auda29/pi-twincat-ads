@@ -32,7 +32,7 @@
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
     "test": "npm run test -w twincat-ads-core && npm run test -w pi-twincat-ads",
-    "smoke:local": "node ./packages/pi/scripts/local-dev-smoke.mjs",
+    "smoke:local": "npm run smoke:local -w pi-twincat-ads --",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "devDependencies": {
