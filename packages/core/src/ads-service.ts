@@ -119,7 +119,7 @@ export interface WatchSymbolOptions {
 export interface TwinCatAdsService {
   readonly state: AdsConnectionState;
   readonly writeMode: PlcWriteMode;
-  readonly lastError?: Error;
+  readonly lastError: Error | undefined;
   readonly hasActiveConnection: boolean;
 
   connect(): Promise<AdsClientConnection>;
@@ -139,6 +139,7 @@ export interface TwinCatAdsService {
   listWatches(): PlcWatchSnapshot[];
   readState(): Promise<PlcStateResult>;
   setWriteMode(mode: PlcWriteMode): PlcWriteModeResult;
+  getWriteModeState(): PlcWriteModeResult;
   canWrite(symbolName: string): PlcWriteAccessResult;
 }
 

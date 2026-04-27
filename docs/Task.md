@@ -38,7 +38,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
   - `writeAllowlist`
 - Sicherstellen, dass der Core keinerlei Pi-Hook-, Prompt- oder MCP-Protokolllogik enthaelt.
 
-### 5. `packages/pi` auf den Core umstellen `[Open]`
+### 5. `packages/pi` auf den Core umstellen `[Done]`
 
 - Pi-Adapter so umbauen, dass er nur noch den Core verwendet.
 - Tool-Wrapper und Hook-Binding auf die Core-Operationen mappen.

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { WriteDeniedError } from "../src/ads/index.js";
 import { createToolDefinitions } from "../src/tools/index.js";
 
-function createAdsServiceStub() {
+function createRuntimeStub() {
   return {
     listSymbols: async () => [
       {
@@ -16,14 +16,14 @@ function createAdsServiceStub() {
         indexOffset: 2,
       },
     ],
-    readValue: async (name: string) => ({
+    readSymbol: async ({ name }: { name: string }) => ({
       name,
       value: 1,
       type: "INT",
       timestamp: "2026-01-01T00:00:00.000Z",
       symbol: { name, type: "INT" },
     }),
-    readMany: async (names: string[]) =>
+    readMany: async ({ names }: { names: string[] }) =>
       names.map((name) => ({
         name,
         value: 1,
@@ -60,27 +60,26 @@ function createAdsServiceStub() {
         deviceName: "Mock PLC",
       },
     }),
-    setWriteMode: async (mode: "read-only" | "enabled") => ({
+    setWriteMode: async ({ mode }: { mode: "read-only" | "enabled" }) => ({
       writeMode: mode,
       runtimeWriteEnabled: mode === "enabled",
       configReadOnly: false,
       writesAllowed: mode === "enabled",
       message: "ok",
     }),
-    writeValue: async (name: string, value: unknown) => ({
+    writeSymbol: async ({ name, value }: { name: string; value: unknown }) => ({
       value,
       dataType: { name: "INT" },
       symbol: { name },
     }),
-    watchValue: async (name: string) => ({
+    watchSymbol: async ({ name }: { name: string }) => ({
       name,
       notificationHandle: 123,
       cycleTimeMs: 250,
       mode: "on-change" as const,
       active: true,
-      unsubscribe: async () => undefined,
     }),
-    unwatchValue: async (name: string) => ({
+    unwatchSymbol: async ({ name }: { name: string }) => ({
       name,
       notificationHandle: 123,
       cycleTimeMs: 250,
@@ -99,7 +98,7 @@ describe("tools", () => {
 
     const result = await tool!.execute(
       { names: [] },
-      { adsService: createAdsServiceStub() as never },
+      { runtime: createRuntimeStub() as never },
     );
 
     expect(result.ok).toBe(false);
@@ -113,9 +112,9 @@ describe("tools", () => {
     const tool = tools.find((entry) => entry.name === "plc_write");
     expect(tool).toBeDefined();
 
-    const adsService = {
-      ...createAdsServiceStub(),
-      writeValue: async () => {
+    const runtime = {
+      ...createRuntimeStub(),
+      writeSymbol: async () => {
         throw new WriteDeniedError(
           "PLC writes are blocked by the runtime write gate. Enable writes explicitly before calling plc_write.",
         );
@@ -124,7 +123,7 @@ describe("tools", () => {
 
     const result = await tool!.execute(
       { name: "MAIN.value", value: 7 },
-      { adsService: adsService as never },
+      { runtime: runtime as never },
     );
 
     expect(result.ok).toBe(false);
@@ -140,7 +139,7 @@ describe("tools", () => {
 
     const result = await tool!.execute(
       { name: "MAIN.watch" },
-      { adsService: createAdsServiceStub() as never },
+      { runtime: createRuntimeStub() as never },
     );
 
     expect(result.ok).toBe(true);

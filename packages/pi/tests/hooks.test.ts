@@ -14,7 +14,7 @@ function createHookContext() {
       notificationCycleTimeMs: 250,
       maxNotifications: 128,
     },
-    adsService: {
+    runtime: {
       connect: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
       readState: vi.fn(async () => ({
@@ -46,7 +46,7 @@ function createHookContext() {
           deviceName: "Mock PLC",
         },
       })),
-      readValue: vi.fn(async (name: string) => ({
+      readSymbol: vi.fn(async ({ name }: { name: string }) => ({
         name,
         value: 1,
         type: "INT",
@@ -79,8 +79,10 @@ describe("hooks", () => {
     const result = await hook!.execute({}, context as never);
 
     expect(result.ok).toBe(true);
-    expect(context.adsService.connect).toHaveBeenCalledOnce();
-    expect(context.adsService.readValue).toHaveBeenCalledWith("MAIN.value");
+    expect(context.runtime.connect).toHaveBeenCalledOnce();
+    expect(context.runtime.readSymbol).toHaveBeenCalledWith({
+      name: "MAIN.value",
+    });
     if (result.ok) {
       expect(result.data.failedSnapshots).toEqual([]);
     }
@@ -115,7 +117,7 @@ describe("hooks", () => {
 
     const context = createHookContext();
     context.config.contextSnapshotSymbols = ["MAIN.value", "MAIN.missing"];
-    context.adsService.readValue = vi.fn(async (name: string) => {
+    context.runtime.readSymbol = vi.fn(async ({ name }: { name: string }) => {
       if (name === "MAIN.missing") {
         throw new Error("missing");
       }
@@ -148,7 +150,7 @@ describe("hooks", () => {
     expect(hook).toBeDefined();
 
     const context = createHookContext();
-    context.adsService.getWriteModeState = vi.fn(() => ({
+    context.runtime.getWriteModeState = vi.fn(() => ({
       writeMode: "read-only" as const,
       runtimeWriteEnabled: false,
       configReadOnly: true,
@@ -176,6 +178,6 @@ describe("hooks", () => {
     const result = await hook!.execute({}, context as never);
 
     expect(result.ok).toBe(true);
-    expect(context.adsService.disconnect).toHaveBeenCalledOnce();
+    expect(context.runtime.disconnect).toHaveBeenCalledOnce();
   });
 });

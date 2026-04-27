@@ -72,6 +72,22 @@ function createServiceStub() {
       calls.push("listWatches");
       return [];
     },
+    getWriteModeState: () => {
+      calls.push("getWriteModeState");
+      return {
+        writeMode: "read-only",
+        runtimeWriteEnabled: false,
+        configReadOnly: true,
+        writesAllowed: false,
+        message: "blocked",
+      };
+    },
+    canWrite: (symbolName) => {
+      calls.push(`canWrite:${symbolName}`);
+      return {
+        allow: symbolName === "MAIN.value",
+      };
+    },
     readState: async () => {
       calls.push("readState");
       return {
@@ -118,6 +134,8 @@ describe("core runtime contract", () => {
     runtime.listWatches();
     await runtime.readState();
     await runtime.setWriteMode({ mode: "enabled" });
+    runtime.getWriteModeState();
+    runtime.evaluateWriteAccess("MAIN.value");
 
     expect(calls).toEqual([
       "listSymbols:MAIN",
@@ -129,6 +147,8 @@ describe("core runtime contract", () => {
       "listWatches",
       "readState",
       "setWriteMode:enabled",
+      "getWriteModeState",
+      "canWrite:MAIN.value",
     ]);
   });
 });

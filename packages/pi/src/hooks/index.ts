@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 import type {
-  AdsService,
   PlcReadResult,
   PlcStateResult,
   PlcWriteModeResult,
-} from "../ads/index.js";
+  TwinCatAdsRuntime,
+} from "twincat-ads-core";
 import type { ExtensionRuntimeConfig } from "../config.js";
 
 const emptyInputSchema = z.object({}).strict();
@@ -18,7 +18,7 @@ const toolCallInputSchema = z
   .strict();
 
 export interface HookHandlerContext {
-  readonly adsService: AdsService;
+  readonly runtime: TwinCatAdsRuntime;
   readonly config: ExtensionRuntimeConfig;
 }
 
@@ -61,7 +61,7 @@ export interface AgentStartHookOutput {
     readonly state: PlcStateResult;
     readonly snapshots: PlcReadResult[];
     readonly failedSnapshots: string[];
-    readonly watches: ReturnType<AdsService["listWatches"]>;
+    readonly watches: ReturnType<TwinCatAdsRuntime["listWatches"]>;
   };
 }
 
@@ -146,7 +146,7 @@ async function readConfiguredSnapshots(
   }
 
   const settled = await Promise.allSettled(
-    snapshotSymbols.map((name) => context.adsService.readValue(name)),
+    snapshotSymbols.map((name) => context.runtime.readSymbol({ name })),
   );
 
   const snapshots: PlcReadResult[] = [];
@@ -205,9 +205,9 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       description: "Open ADS connection and hydrate caches.",
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
-        await context.adsService.connect();
+        await context.runtime.connect();
         const [state, snapshotResult] = await Promise.all([
-          context.adsService.readState(),
+          context.runtime.readState(),
           readConfiguredSnapshots(context),
         ]);
 
@@ -225,7 +225,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
         const [state, snapshotResult] = await Promise.all([
-          context.adsService.readState(),
+          context.runtime.readState(),
           readConfiguredSnapshots(context),
         ]);
 
@@ -234,7 +234,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
             state,
             snapshots: snapshotResult.snapshots,
             failedSnapshots: snapshotResult.failedSnapshots,
-            watches: context.adsService.listWatches(),
+            watches: context.runtime.listWatches(),
           },
         };
       },
@@ -250,8 +250,8 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
           context: {
             snapshots: snapshotResult.snapshots,
             failedSnapshots: snapshotResult.failedSnapshots,
-            watchCount: context.adsService.listWatches().length,
-            writeMode: context.adsService.getWriteModeState(),
+            watchCount: context.runtime.listWatches().length,
+            writeMode: context.runtime.getWriteModeState(),
           },
         };
       },
@@ -270,22 +270,22 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
               requiresConfirmation: false,
               reason:
                 "plc_write requires a string symbol name in arguments.name before the call can be evaluated.",
-              writeMode: context.adsService.getWriteModeState(),
+              writeMode: context.runtime.getWriteModeState(),
             };
           }
 
-          const writeAccess = context.adsService.evaluateWriteAccess(symbolName);
+          const writeAccess = context.runtime.evaluateWriteAccess(symbolName);
 
           return {
             allow: writeAccess.allow,
             requiresConfirmation: writeAccess.allow,
             reason: writeAccess.reason,
-            writeMode: context.adsService.getWriteModeState(),
+            writeMode: context.runtime.getWriteModeState(),
           };
         }
 
         if (input.toolName === "plc_set_write_mode") {
-          const writeMode = context.adsService.getWriteModeState();
+          const writeMode = context.runtime.getWriteModeState();
           const targetMode = extractWriteModeFromArguments(input.arguments);
           const blockedByConfig =
             writeMode.configReadOnly && targetMode === "enabled";
@@ -303,7 +303,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
         return {
           allow: true,
           requiresConfirmation: false,
-          writeMode: context.adsService.getWriteModeState(),
+          writeMode: context.runtime.getWriteModeState(),
         };
       },
     }),
@@ -312,7 +312,7 @@ export function createHookDefinitions(): HookDefinition<unknown, unknown>[] {
       description: "Release notifications, handles, and the ADS connection.",
       inputSchema: emptyInputSchema,
       handler: async (_input, context) => {
-        await context.adsService.disconnect();
+        await context.runtime.disconnect();
         return {
           disconnected: true,
         };

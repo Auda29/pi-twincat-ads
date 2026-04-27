@@ -1,4 +1,5 @@
 import { AdsService, type AdsServiceDependencies } from "./ads/index.js";
+import { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-ads-core";
 import {
   normalizeExtensionConfig,
   type ExtensionConfigInput,
@@ -24,6 +25,7 @@ export interface PiTwinCatAdsExtension {
   readonly name: "pi-twincat-ads";
   readonly config: ExtensionRuntimeConfig;
   readonly adsService: AdsService;
+  readonly runtime: TwinCatAdsRuntime;
   readonly tools: ToolDefinition<unknown, unknown>[];
   readonly hooks: HookDefinition<unknown, unknown>[];
   register(): Promise<ExtensionRegistration>;
@@ -32,6 +34,7 @@ export interface PiTwinCatAdsExtension {
 class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
   readonly name = "pi-twincat-ads" as const;
   readonly adsService: AdsService;
+  readonly runtime: TwinCatAdsRuntime;
   readonly tools: ToolDefinition<unknown, unknown>[];
   readonly hooks: HookDefinition<unknown, unknown>[];
 
@@ -40,12 +43,13 @@ class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
     dependencies: AdsServiceDependencies = {},
   ) {
     this.adsService = new AdsService(config, dependencies);
+    this.runtime = createTwinCatAdsRuntime(this.adsService, { config });
 
     const toolContext: ToolHandlerContext = {
-      adsService: this.adsService,
+      runtime: this.runtime,
     };
     const hookContext: HookHandlerContext = {
-      adsService: this.adsService,
+      runtime: this.runtime,
       config,
     };
 
@@ -97,6 +101,8 @@ export {
   type ToolDefinition,
   type ToolExecutionResult,
 } from "./tools/index.js";
+
+export { createTwinCatAdsRuntime, type TwinCatAdsRuntime } from "twincat-ads-core";
 
 export {
   createHookDefinitions,

@@ -1,5 +1,7 @@
 import type { TwinCatAdsRuntimeConfig } from "./config.js";
 import type {
+  AdsConnectionInfo,
+  PlcWriteAccessResult,
   PlcReadResult,
   PlcStateResult,
   PlcSymbolSummary,
@@ -44,6 +46,8 @@ export interface SetWriteModeInput {
 }
 
 export interface TwinCatAdsOperations {
+  connect(): Promise<AdsConnectionInfo>;
+  disconnect(): Promise<void>;
   listSymbols(input?: ListSymbolsInput): Promise<PlcSymbolSummary[]>;
   readSymbol<T = unknown>(input: ReadSymbolInput): Promise<PlcReadResult<T>>;
   readMany(input: ReadManyInput): Promise<PlcReadResult[]>;
@@ -55,6 +59,8 @@ export interface TwinCatAdsOperations {
   listWatches(): PlcWatchSnapshot[];
   readState(): Promise<PlcStateResult>;
   setWriteMode(input: SetWriteModeInput): Promise<PlcWriteModeResult>;
+  getWriteModeState(): PlcWriteModeResult;
+  evaluateWriteAccess(symbolName: string): PlcWriteAccessResult;
 }
 
 export interface TwinCatAdsRuntime extends TwinCatAdsOperations {
@@ -72,6 +78,8 @@ export function createTwinCatAdsRuntime(
 ): TwinCatAdsRuntime {
   const runtime: TwinCatAdsRuntime = {
     service,
+    connect: async () => service.connect(),
+    disconnect: async () => service.disconnect(),
     listSymbols: async (input = {}) => service.listSymbols(input.filter),
     readSymbol: async (input) => service.readSymbol(input.name),
     readMany: async (input) => service.readMany(input.names),
@@ -101,6 +109,12 @@ export function createTwinCatAdsRuntime(
     listWatches: () => service.listWatches(),
     readState: async () => service.readState(),
     setWriteMode: async (input) => service.setWriteMode(input.mode),
+    getWriteModeState: () => service.getWriteModeState(),
+    evaluateWriteAccess: (symbolName) =>
+      service.canWrite?.(symbolName) ?? {
+        allow: false,
+        reason: "The configured ADS service does not expose write access evaluation.",
+      },
   };
 
   if (options.config !== undefined) {

@@ -2,14 +2,14 @@ import { z } from "zod";
 
 import {
   WriteDeniedError,
-  type AdsService,
   type PlcReadResult,
   type PlcStateResult,
   type PlcSymbolSummary,
   type PlcWatchMode,
   type PlcWatchSnapshot,
   type PlcWriteModeResult,
-} from "../ads/index.js";
+  type TwinCatAdsRuntime,
+} from "twincat-ads-core";
 
 const symbolNameSchema = z
   .string()
@@ -82,7 +82,7 @@ const unwatchInputSchema = z
 const listWatchesInputSchema = z.object({}).strict();
 
 export interface ToolHandlerContext {
-  readonly adsService: AdsService;
+  readonly runtime: TwinCatAdsRuntime;
 }
 
 export interface ToolSuccessResult<TOutput> {
@@ -245,7 +245,9 @@ export function createToolDefinitions(): Array<
       description: "List available PLC symbols with metadata.",
       inputSchema: listSymbolsInputSchema,
       handler: async (input, context) => {
-        const symbols = await context.adsService.listSymbols(input.filter);
+        const symbols = await context.runtime.listSymbols(
+          input.filter === undefined ? {} : { filter: input.filter },
+        );
         return {
           symbols,
           count: symbols.length,
@@ -257,14 +259,14 @@ export function createToolDefinitions(): Array<
       description:
         "Enable or disable PLC writes for the current session runtime gate.",
       inputSchema: setWriteModeInputSchema,
-      handler: async (input, context) => context.adsService.setWriteMode(input.mode),
+      handler: async (input, context) => context.runtime.setWriteMode(input),
     }),
     createToolDefinition({
       name: "plc_read",
       description: "Read a PLC symbol by name.",
       inputSchema: readInputSchema,
       handler: async (input, context) => {
-        const result = await context.adsService.readValue(input.name);
+        const result = await context.runtime.readSymbol(input);
         return { result };
       },
     }),
@@ -273,7 +275,7 @@ export function createToolDefinitions(): Array<
       description: "Read multiple PLC symbols using a bundled ADS request.",
       inputSchema: readManyInputSchema,
       handler: async (input, context) => {
-        const results = await context.adsService.readMany(input.names);
+        const results = await context.runtime.readMany(input);
         return {
           results,
           count: results.length,
@@ -304,11 +306,10 @@ export function createToolDefinitions(): Array<
           watchOptions.maxDelayMs = input.maxDelayMs;
         }
 
-        const watch = await context.adsService.watchValue(
-          input.name,
-          undefined,
-          watchOptions,
-        );
+        const watch = await context.runtime.watchSymbol({
+          name: input.name,
+          ...watchOptions,
+        });
 
         const snapshot: {
           name: string;
@@ -344,7 +345,7 @@ export function createToolDefinitions(): Array<
       description: "Remove a previously registered PLC watch by symbol name.",
       inputSchema: unwatchInputSchema,
       handler: async (input, context) => {
-        const watch = await context.adsService.unwatchValue(input.name);
+        const watch = await context.runtime.unwatchSymbol(input);
         return { watch };
       },
     }),
@@ -353,7 +354,7 @@ export function createToolDefinitions(): Array<
       description: "List currently registered PLC watches for this session.",
       inputSchema: listWatchesInputSchema,
       handler: async (_input, context) => {
-        const watches = context.adsService.listWatches();
+        const watches = context.runtime.listWatches();
         return {
           watches,
           count: watches.length,
@@ -366,18 +367,11 @@ export function createToolDefinitions(): Array<
         "Write a PLC symbol when config and runtime write gates permit it.",
       inputSchema: writeInputSchema,
       handler: async (input, context) => {
-        const writeResult = await context.adsService.writeValue(
-          input.name,
-          input.value,
-        );
-
         return {
-          result: {
-            name: writeResult.symbol.name,
-            value: writeResult.value,
-            type: writeResult.dataType.name,
-            timestamp: new Date().toISOString(),
-          },
+          result: await context.runtime.writeSymbol({
+            name: input.name,
+            value: input.value,
+          }),
         };
       },
     }),
@@ -385,7 +379,7 @@ export function createToolDefinitions(): Array<
       name: "plc_state",
       description: "Inspect TwinCAT runtime and ADS connection state.",
       inputSchema: stateInputSchema,
-      handler: async (_input, context) => context.adsService.readState(),
+      handler: async (_input, context) => context.runtime.readState(),
     }),
   ];
 }
