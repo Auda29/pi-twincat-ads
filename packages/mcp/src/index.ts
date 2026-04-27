@@ -1,1 +1,518 @@
+#!/usr/bin/env node
+
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  type CallToolResult,
+  type Tool,
+} from "@modelcontextprotocol/sdk/types.js";
+import {
+  AdsService,
+  WriteDeniedError,
+  createTwinCatAdsRuntime,
+  normalizeTwinCatAdsConfig,
+  type AdsServiceDependencies,
+  type TwinCatAdsConfigInput,
+  type TwinCatAdsRuntime,
+} from "twincat-ads-core";
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
+
 export const packageName = "twincat-ads-mcp";
+export const packageVersion = "0.1.0";
+
+const symbolNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Symbol name must not be empty.");
+
+const emptyInputSchema = z.object({}).strict();
+const listSymbolsInputSchema = z
+  .object({
+    filter: z.string().trim().min(1).optional(),
+  })
+  .strict();
+const readInputSchema = z
+  .object({
+    name: symbolNameSchema,
+  })
+  .strict();
+const readManyInputSchema = z
+  .object({
+    names: z
+      .array(symbolNameSchema)
+      .min(1, "At least one PLC symbol is required.")
+      .max(100, "At most 100 PLC symbols can be read at once."),
+  })
+  .strict();
+const writeInputSchema = z
+  .object({
+    name: symbolNameSchema,
+    value: z.unknown(),
+  })
+  .strict();
+const watchInputSchema = z
+  .object({
+    name: symbolNameSchema,
+    mode: z.enum(["on-change", "cyclic"]).optional(),
+    cycleTimeMs: z
+      .number()
+      .int()
+      .min(10, "Watch cycle time must be at least 10 ms.")
+      .max(60_000, "Watch cycle time must be 60000 ms or lower.")
+      .optional(),
+    maxDelayMs: z
+      .number()
+      .int()
+      .min(0, "Watch max delay must be 0 ms or higher.")
+      .max(60_000, "Watch max delay must be 60000 ms or lower.")
+      .optional(),
+  })
+  .strict();
+const unwatchInputSchema = readInputSchema;
+const setWriteModeInputSchema = z
+  .object({
+    mode: z.enum(["read-only", "enabled"]),
+  })
+  .strict();
+
+type McpInputSchema = Tool["inputSchema"];
+
+export interface McpToolDefinition<TInput = unknown> {
+  readonly name: string;
+  readonly title: string;
+  readonly description: string;
+  readonly inputSchema: z.ZodType<TInput>;
+  readonly annotations?: Tool["annotations"];
+  execute(input: TInput): Promise<unknown> | unknown;
+}
+
+function toMcpInputSchema(schema: z.ZodType): McpInputSchema {
+  const jsonSchema = zodToJsonSchema(schema, {
+    $refStrategy: "none",
+    target: "jsonSchema7",
+  });
+
+  const typedSchema = jsonSchema as { readonly type?: unknown };
+  if (
+    typeof jsonSchema !== "object" ||
+    jsonSchema === null ||
+    typedSchema.type !== "object"
+  ) {
+    throw new Error("MCP tool input schemas must be JSON object schemas.");
+  }
+
+  const { $schema: _schema, ...mcpSchema } = jsonSchema;
+  return mcpSchema as McpInputSchema;
+}
+
+function toMcpTool(tool: McpToolDefinition): Tool {
+  const mcpTool: Tool = {
+    name: tool.name,
+    title: tool.title,
+    description: tool.description,
+    inputSchema: toMcpInputSchema(tool.inputSchema),
+  };
+
+  if (tool.annotations !== undefined) {
+    return {
+      ...mcpTool,
+      annotations: tool.annotations,
+    };
+  }
+
+  return mcpTool;
+}
+
+function toJsonSafeValue(value: unknown): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
+function createToolResult(value: unknown): CallToolResult {
+  const structuredContent = toJsonSafeValue(value);
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(structuredContent, null, 2),
+      },
+    ],
+    structuredContent,
+  };
+}
+
+function createToolErrorResult(
+  code: string,
+  message: string,
+  details?: unknown,
+): CallToolResult {
+  return {
+    content: [
+      {
+        type: "text",
+        text: message,
+      },
+    ],
+    structuredContent: toJsonSafeValue({
+      error: {
+        code,
+        message,
+        details,
+      },
+    }),
+    isError: true,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function createMcpToolDefinitions(
+  runtime: TwinCatAdsRuntime,
+): McpToolDefinition[] {
+  return [
+    {
+      name: "ads_connect",
+      title: "ADS Connect",
+      description: "Open the configured ADS connection.",
+      inputSchema: emptyInputSchema,
+      annotations: { idempotentHint: true, openWorldHint: true },
+      execute: async () => ({
+        connection: await runtime.connect(),
+      }),
+    },
+    {
+      name: "ads_disconnect",
+      title: "ADS Disconnect",
+      description: "Close the ADS connection and release active handles.",
+      inputSchema: emptyInputSchema,
+      annotations: { idempotentHint: true, openWorldHint: false },
+      execute: async () => {
+        await runtime.disconnect();
+        return { disconnected: true };
+      },
+    },
+    {
+      name: "plc_list_symbols",
+      title: "PLC List Symbols",
+      description: "List available PLC symbols with metadata.",
+      inputSchema: listSymbolsInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof listSymbolsInputSchema>) => {
+        const symbols = await runtime.listSymbols(
+          input.filter === undefined ? {} : { filter: input.filter },
+        );
+        return {
+          symbols,
+          count: symbols.length,
+        };
+      },
+    },
+    {
+      name: "plc_read",
+      title: "PLC Read",
+      description: "Read a PLC symbol by name.",
+      inputSchema: readInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof readInputSchema>) => ({
+        result: await runtime.readSymbol(input),
+      }),
+    },
+    {
+      name: "plc_read_many",
+      title: "PLC Read Many",
+      description: "Read multiple PLC symbols using a bundled ADS request.",
+      inputSchema: readManyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof readManyInputSchema>) => {
+        const results = await runtime.readMany(input);
+        return {
+          results,
+          count: results.length,
+        };
+      },
+    },
+    {
+      name: "plc_write",
+      title: "PLC Write",
+      description:
+        "Write a PLC symbol when config and runtime write gates permit it.",
+      inputSchema: writeInputSchema,
+      annotations: {
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      execute: async (input: z.infer<typeof writeInputSchema>) => ({
+        result: await runtime.writeSymbol({
+          name: input.name,
+          value: input.value,
+        }),
+      }),
+    },
+    {
+      name: "plc_watch",
+      title: "PLC Watch",
+      description:
+        "Register or reuse a PLC notification watch for a symbol.",
+      inputSchema: watchInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof watchInputSchema>) => {
+        const watchInput = {
+          name: input.name,
+          ...(input.mode === undefined ? {} : { mode: input.mode }),
+          ...(input.cycleTimeMs === undefined
+            ? {}
+            : { cycleTimeMs: input.cycleTimeMs }),
+          ...(input.maxDelayMs === undefined
+            ? {}
+            : { maxDelayMs: input.maxDelayMs }),
+        };
+
+        return {
+          watch: await runtime.watchSymbol(watchInput),
+        };
+      },
+    },
+    {
+      name: "plc_unwatch",
+      title: "PLC Unwatch",
+      description: "Remove a previously registered PLC watch by symbol name.",
+      inputSchema: unwatchInputSchema,
+      annotations: { idempotentHint: true, openWorldHint: false },
+      execute: async (input: z.infer<typeof unwatchInputSchema>) => ({
+        watch: await runtime.unwatchSymbol(input),
+      }),
+    },
+    {
+      name: "plc_list_watches",
+      title: "PLC List Watches",
+      description: "List currently registered PLC watches for this server.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: () => {
+        const watches = runtime.listWatches();
+        return {
+          watches,
+          count: watches.length,
+        };
+      },
+    },
+    {
+      name: "plc_state",
+      title: "PLC State",
+      description: "Inspect TwinCAT runtime and ADS connection state.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async () => runtime.readState(),
+    },
+    {
+      name: "plc_set_write_mode",
+      title: "PLC Set Write Mode",
+      description:
+        "Enable or disable PLC writes for the current server runtime gate.",
+      inputSchema: setWriteModeInputSchema,
+      annotations: { destructiveHint: false, idempotentHint: true },
+      execute: async (input: z.infer<typeof setWriteModeInputSchema>) =>
+        runtime.setWriteMode(input),
+    },
+    {
+      name: "plc_get_write_mode",
+      title: "PLC Get Write Mode",
+      description: "Read the current PLC write-mode gate state.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: () => runtime.getWriteModeState(),
+    },
+    {
+      name: "plc_evaluate_write_access",
+      title: "PLC Evaluate Write Access",
+      description:
+        "Check whether the configured write gates would allow a symbol write.",
+      inputSchema: readInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: (input: z.infer<typeof readInputSchema>) =>
+        runtime.evaluateWriteAccess(input.name),
+    },
+  ];
+}
+
+export async function callMcpTool(
+  tools: readonly McpToolDefinition[],
+  name: string,
+  rawArguments: unknown,
+): Promise<CallToolResult> {
+  const tool = tools.find((entry) => entry.name === name);
+
+  if (tool === undefined) {
+    return createToolErrorResult(
+      "TOOL_NOT_FOUND",
+      `Unknown TwinCAT ADS MCP tool: ${name}`,
+    );
+  }
+
+  const parseResult = tool.inputSchema.safeParse(rawArguments ?? {});
+  if (!parseResult.success) {
+    return createToolErrorResult(
+      "TOOL_INPUT_INVALID",
+      "Tool arguments did not match the MCP tool schema.",
+      parseResult.error.flatten(),
+    );
+  }
+
+  try {
+    return createToolResult(await tool.execute(parseResult.data));
+  } catch (error) {
+    return createToolErrorResult(
+      error instanceof WriteDeniedError ? error.code : "PLC_OPERATION_FAILED",
+      errorMessage(error),
+    );
+  }
+}
+
+export function createMcpServer(runtime: TwinCatAdsRuntime): Server {
+  const tools = createMcpToolDefinitions(runtime);
+  const server = new Server(
+    {
+      name: packageName,
+      version: packageVersion,
+    },
+    {
+      capabilities: {
+        tools: {},
+      },
+      instructions:
+        "TwinCAT ADS MCP server exposing PLC operations backed by twincat-ads-core.",
+    },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: tools.map(toMcpTool),
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) =>
+    callMcpTool(tools, request.params.name, request.params.arguments ?? {}),
+  );
+
+  return server;
+}
+
+export function createRuntimeFromConfig(
+  input: TwinCatAdsConfigInput,
+  dependencies: AdsServiceDependencies = {},
+): TwinCatAdsRuntime {
+  const config = normalizeTwinCatAdsConfig(input);
+  const service = new AdsService(config, dependencies);
+  return createTwinCatAdsRuntime(service, { config });
+}
+
+function parseOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  return Number(value);
+}
+
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function parseSymbolList(value: string | undefined): string[] | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter((entry) => entry[1] !== undefined),
+  ) as T;
+}
+
+function configPathFromArgs(argv: readonly string[]): string | undefined {
+  const flagIndex = argv.findIndex((entry) => entry === "--config");
+  if (flagIndex === -1) {
+    return undefined;
+  }
+
+  return argv[flagIndex + 1];
+}
+
+export async function loadConfigInput(
+  argv: readonly string[] = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TwinCatAdsConfigInput> {
+  const configPath = configPathFromArgs(argv);
+  if (configPath !== undefined) {
+    const resolvedPath = resolve(process.cwd(), configPath);
+    return JSON.parse(await readFile(resolvedPath, "utf8")) as TwinCatAdsConfigInput;
+  }
+
+  if (env.TWINCAT_ADS_CONFIG !== undefined) {
+    return JSON.parse(env.TWINCAT_ADS_CONFIG) as TwinCatAdsConfigInput;
+  }
+
+  if (env.TWINCAT_ADS_TARGET_AMS_NET_ID !== undefined) {
+    const connectionMode =
+      env.TWINCAT_ADS_CONNECTION_MODE === "direct" ? "direct" : "router";
+    const baseConfig = {
+      connectionMode,
+      targetAmsNetId: env.TWINCAT_ADS_TARGET_AMS_NET_ID,
+      targetAdsPort: parseOptionalNumber(env.TWINCAT_ADS_TARGET_ADS_PORT),
+      readOnly: parseOptionalBoolean(env.TWINCAT_ADS_READ_ONLY),
+      writeAllowlist: parseSymbolList(env.TWINCAT_ADS_WRITE_ALLOWLIST),
+      contextSnapshotSymbols: parseSymbolList(
+        env.TWINCAT_ADS_CONTEXT_SNAPSHOT_SYMBOLS,
+      ),
+      notificationCycleTimeMs: parseOptionalNumber(
+        env.TWINCAT_ADS_NOTIFICATION_CYCLE_TIME_MS,
+      ),
+      maxNotifications: parseOptionalNumber(env.TWINCAT_ADS_MAX_NOTIFICATIONS),
+      routerAddress: env.TWINCAT_ADS_ROUTER_ADDRESS,
+      routerTcpPort: parseOptionalNumber(env.TWINCAT_ADS_ROUTER_TCP_PORT),
+      localAmsNetId: env.TWINCAT_ADS_LOCAL_AMS_NET_ID,
+      localAdsPort: parseOptionalNumber(env.TWINCAT_ADS_LOCAL_ADS_PORT),
+    };
+
+    return withoutUndefined(baseConfig) as TwinCatAdsConfigInput;
+  }
+
+  throw new Error(
+    "Missing TwinCAT ADS config. Pass --config <file>, set TWINCAT_ADS_CONFIG, or set TWINCAT_ADS_TARGET_AMS_NET_ID.",
+  );
+}
+
+export async function main(): Promise<void> {
+  const config = await loadConfigInput();
+  const runtime = createRuntimeFromConfig(config);
+  const server = createMcpServer(runtime);
+  await server.connect(new StdioServerTransport());
+}
+
+function isCliEntryPoint(): boolean {
+  return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+if (isCliEntryPoint()) {
+  main().catch((error: unknown) => {
+    console.error(errorMessage(error));
+    process.exitCode = 1;
+  });
+}

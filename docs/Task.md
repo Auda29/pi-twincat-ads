@@ -45,7 +45,7 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in ein npm-workspac
 - Kontext-Injection, `session_start`, `context`, `tool_call` und `session_shutdown` im Pi-Paket halten.
 - Regressionen gegen den bisherigen `pi-twincat-ads`-Stand vermeiden.
 
-### 6. `twincat-ads-mcp` als v0.1-Server aufbauen `[Open]`
+### 6. `twincat-ads-mcp` als v0.1-Server aufbauen `[Done]`
 
 - MCP-Paket mit `@modelcontextprotocol/sdk` als stdio-Server anlegen.
 - Core-Operationen als MCP-Tools exponieren.
