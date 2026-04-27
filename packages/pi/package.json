@@ -1,0 +1,53 @@
+{
+  "name": "pi-twincat-ads",
+  "version": "0.2.2",
+  "description": "Pi extension for reading and writing TwinCAT runtime values over ADS.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pi-extension": {
+      "types": "./dist/pi-extension.d.ts",
+      "import": "./dist/pi-extension.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "keywords": [
+    "pi-package",
+    "twincat",
+    "ads",
+    "beckhoff",
+    "plc"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/pi-extension.js"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "twincat-ads-core": "0.2.2"
+  }
+}

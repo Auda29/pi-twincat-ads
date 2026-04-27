@@ -1,73 +1,47 @@
 {
-  "name": "pi-twincat-ads",
+  "name": "twincat-ads",
   "version": "0.2.2",
-  "description": "Pi extension for reading and writing TwinCAT runtime values over ADS.",
+  "description": "Monorepo for TwinCAT ADS core, Pi extension, and MCP server packages.",
   "author": "Niklas W",
   "license": "MIT",
-  "private": false,
+  "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./pi-extension": {
-      "types": "./dist/pi-extension.d.ts",
-      "import": "./dist/pi-extension.js"
-    }
-  },
-  "files": [
-    "dist",
-    "skills",
-    "README.md",
-    "LICENSE",
-    "CONTRIBUTING.md",
-    "SECURITY.md"
+  "workspaces": [
+    "packages/*"
   ],
   "keywords": [
-    "pi-package",
     "twincat",
     "ads",
     "beckhoff",
-    "plc"
+    "plc",
+    "mcp",
+    "pi-package"
   ],
-  "pi": {
-    "extensions": [
-      "./dist/pi-extension.js"
-    ],
-    "skills": [
-      "./skills"
-    ]
-  },
   "engines": {
     "node": ">=20"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Auda29/pi-twincat-ads.git"
+    "url": "git+https://github.com/Auda29/twincat-ads.git"
   },
-  "homepage": "https://github.com/Auda29/pi-twincat-ads#readme",
+  "homepage": "https://github.com/Auda29/twincat-ads#readme",
   "bugs": {
-    "url": "https://github.com/Auda29/pi-twincat-ads/issues"
+    "url": "https://github.com/Auda29/twincat-ads/issues"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -b",
+    "check": "tsc -b --pretty false",
     "test": "vitest run",
     "smoke:local": "node ./scripts/local-dev-smoke.mjs",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
-  "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.67.3",
-    "ads-client": "^2.2.0",
-    "@sinclair/typebox": "^0.34.49",
-    "zod": "^3.24.2"
-  },
   "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.67.3",
+    "@sinclair/typebox": "^0.34.49",
     "@types/node": "^22.13.10",
+    "ads-client": "^2.2.0",
     "typescript": "^5.8.2",
-    "vitest": "^3.0.8"
+    "vitest": "^3.0.8",
+    "zod": "^3.24.2"
   }
 }
