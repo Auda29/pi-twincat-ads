@@ -18,7 +18,7 @@
     }
   },
   "bin": {
-    "twincat-mcp": "./dist/index.js"
+    "twincat-mcp": "dist/index.js"
   },
   "files": [
     "dist",

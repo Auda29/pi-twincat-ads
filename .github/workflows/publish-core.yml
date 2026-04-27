@@ -69,6 +69,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check whether Core version is already published
+        id: published
+        run: |
+          PACKAGE_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('packages/core/package.json', 'utf8')).version")"
+
+          if npm view "twincat-mcp-core@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "twincat-mcp-core@${PACKAGE_VERSION} is already published; the publish step will be skipped."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check workspace integration
         run: npm run check:workspace
 
@@ -89,5 +101,5 @@ jobs:
         run: npm publish -w twincat-mcp-core --tag "$NPM_TAG" --access public --dry-run
 
       - name: Publish Core package
-        if: ${{ github.event_name != 'workflow_dispatch' }}
+        if: ${{ github.event_name != 'workflow_dispatch' && steps.published.outputs.published != 'true' }}
         run: npm publish -w twincat-mcp-core --tag "$NPM_TAG" --access public --provenance

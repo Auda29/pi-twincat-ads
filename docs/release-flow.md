@@ -61,8 +61,10 @@ package's trusted publisher for GitHub Actions with repository
 Each workflow can be started manually with `workflow_dispatch`, by pushing a
 matching package version tag, or by publishing a GitHub Release whose tag uses
 the matching prefix. Manual runs are always `--dry-run`; only version tags or
-published releases run the real publish step with provenance. Releases for
-other package tag prefixes are ignored by each package publish job.
+published releases run the real publish step with provenance. Core and MCP
+publish jobs skip the publish step when the package version already exists on
+npm, so backfilled release marker tags can still run the verification pipeline.
+Releases for other package tag prefixes are ignored by each package publish job.
 
 ## Changesets Preparation
 
