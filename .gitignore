@@ -16,6 +16,9 @@ yarn-error.log*
 .pnpm-debug.log*
 .cache/
 
+# Local research notes
+docs/coagent_research_findings.md
+
 # Environment and secrets
 .env
 .env.*

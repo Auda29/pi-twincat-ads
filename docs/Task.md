@@ -75,7 +75,13 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in das offizielle `
 - Migrationshinweise vom bisherigen `pi-twincat-ads`-Repo dokumentieren.
 - Konfiguration, Safety-Modell und typische Deploy-/Testpfade fuer Pi und MCP beschreiben.
 
-## Phase 2: PLC-, NC-, IO- und TwinCAT-Diagnose-Erweiterungen
+## Phase 2: ADS-Runtime-Erweiterungen fuer PLC, NC, IO und TwinCAT-Diagnose
+
+Ziel dieser Phase ist eine stabile, read-lastige Runtime-Erweiterung auf Basis
+von ADS. Sie soll bewusst unabhaengig von XAE-/Visual-Studio-
+Engineering-Backends bleiben. Projektbaum-, POU-Code-, Build- und
+Engineering-Fehlerlisten werden fuer Phase 3 vorgemerkt, damit Phase 2
+lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 
 ### 10. Multi-Service-ADS-Basis fuer PLC, NC und IO vorbereiten `[Open]`
 
@@ -95,6 +101,8 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in das offizielle `
 - `plc_describe_symbol` ergaenzen, um Typ, Groesse, Metadaten und Struct-/Array-Informationen zu einem Symbol zu liefern.
 - Config-basierte PLC-Symbolgruppen einfuehren, z. B. `status`, `alarms`, `recipe` oder `diagnostics`.
 - `plc_read_group` implementieren, um eine konfigurierte Symbolgruppe gezielt zu lesen.
+- `plc_list_groups` implementieren, um konfigurierte Gruppen sichtbar zu machen.
+- Watch-Snapshots fuer konfigurierte Gruppen pruefen, aber erst einfuehren, wenn die Ausgabe weiterhin kompakt bleibt.
 - Tests fuer Symbolbeschreibung, unbekannte Symbole und Gruppen-Reads ergaenzen.
 
 ### 12. NC-Read-Only-Tools einfuehren `[Open]`
@@ -117,18 +125,84 @@ Diese Datei zerlegt den naechsten Umbau von `pi-twincat-ads` in das offizielle `
 
 ### 14. TwinCAT-weite Diagnose-Tools fuer Fehler, Events und Output ergaenzen `[Open]`
 
-- Backends fuer Runtime-Events, Engineering-Fehlerlisten und Output/Logs evaluieren, bevor die Tool-API festgezurrt wird.
+- Backends fuer Runtime-Events und Runtime-Logs evaluieren, bevor die Tool-API festgezurrt wird.
+- Engineering-Fehlerlisten, Build-Ausgaben und XAE-Output-Fenster nicht in Phase 2 implementieren; diese gehoeren in Phase 3.
 - `tc_state` implementieren, um TwinCAT-/ADS-/PLC-/NC-Grundzustand kompakt zu pruefen.
 - `tc_event_list` implementieren, um letzte TwinCAT/EventLogger-Meldungen zu lesen.
-- `tc_error_list` implementieren, um Engineering-/Build-Fehlerlisten auszulesen, sofern eine Quelle konfiguriert ist.
-- `tc_output_read` implementieren, um relevante Output-, Build- oder Logtexte gezielt zu lesen.
-- Quellen fuer Error List und Output konfigurierbar halten, weil Runtime-Diagnose und Engineering-Ausgabe technisch unterschiedliche Backends haben werden oder koennen.
+- `tc_runtime_error_list` implementieren, um aktive Runtime-/Systemfehler zu lesen, sofern eine Quelle konfiguriert ist.
+- `tc_log_read` implementieren, um relevante Runtime- oder Event-Logtexte gezielt zu lesen.
+- Quellen fuer Events und Runtime-Logs konfigurierbar halten.
 - Filter wie `limit`, `since`, `severity` und Textsuche vorsehen, damit die Tools keine grossen unkontrollierten Dumps erzeugen.
 
 ### 15. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Open]`
 
 - Kein globales "alles auslesen"-Tool einfuehren.
-- `tc_diagnose_errors` als kleine Kombination aus Fehlerliste, Output und letzten Events implementieren.
-- `tc_diagnose_runtime` als kleine Kombination aus TC-State, PLC-State, NC-State und aktiven Fehlern implementieren.
+- `tc_diagnose_errors` als kleine Kombination aus Runtime-Fehlern, Runtime-Logs und letzten Events implementieren.
+- `tc_diagnose_runtime` als kleine Kombination aus TC-State, PLC-State, NC-State, IO-State und aktiven Runtime-Fehlern implementieren.
 - Beide Diagnose-Commands mit Limits, Filtern und klarer Ausgabe strukturieren.
 - Dokumentieren, wann einzelne Commands bevorzugt werden und wann die Kombi-Commands sinnvoll sind.
+
+## Phase 3: XAE-Engineering-, Projekt- und Code-Kontext
+
+Diese Phase orientiert sich an den CoAgent-Rechercheergebnissen, bleibt aber
+produktunabhaengig entworfen. Ziel ist ein optionales Engineering-Backend fuer
+offene TwinCAT-XAE-/Visual-Studio-Projekte. Die Tool-Oberflaeche soll klar von
+den ADS-Runtime-Tools getrennt bleiben, weil Verfuegbarkeit, Berechtigungen und
+Fehlerbilder andere sind.
+
+### 16. Engineering-Backend und Projektkontext evaluieren `[Open]`
+
+- Verfuegbare Backends fuer XAE-/Visual-Studio-Projektzugriff evaluieren:
+  Automation Interface, DTE/VS-Integration, TcXaeShell-Kontext, GAS/WebSocket
+  oder explizit konfigurierte Projektdateien.
+- Read-only-Prototyp fuer Workbench-/Projekt-Erkennung bauen.
+- `tc_list_workbenches` pruefen, falls ein Live-XAE-Kontext verfuegbar ist.
+- `tc_list_projects` implementieren oder prototypisieren, um SysManager-, PLC- und HMI-Projekte sichtbar zu machen.
+- `tc_project_state` definieren, um Projektdatei, Projekttyp, aktive Verbindung und Backend-Quelle kompakt auszugeben.
+- Backend-Faehigkeiten explizit melden, z. B. `runtimeOnly`, `engineeringRead`, `engineeringWrite`.
+
+### 17. SysManager-Tree und I/O-Topologie als Engineering-Kontext lesen `[Open]`
+
+- Read-only-Zugriff auf den SysManager-Baum evaluieren.
+- `tc_tree_read` implementieren, um einen konfigurierten oder angegebenen Tree-Pfad gezielt zu lesen.
+- `tc_tree_search` implementieren, um TreeItems nach Name, Typ oder Kommentar zu finden.
+- `tc_tree_describe_item` implementieren, um Typ, Pfad, Kommentar, Settings und Kinder kompakt zu beschreiben.
+- `io_list_topology` als Engineering-Ergaenzung zu den ADS-IO-Reads aus Phase 2 entwerfen.
+- `io_describe_device` und `io_describe_terminal` fuer Geraete/Klemmen pruefen.
+- Schreibende Tree-Operationen wie Create/Rename/Delete nur als spaetere, separat gegatete Phase vormerken.
+
+### 18. PLC-Code-, POU- und Library-Kontext read-only einfuehren `[Open]`
+
+- Classic PLC und PLC++/dateibasierte Projekte getrennt modellieren.
+- `plc_list_pous` implementieren, um Programme, FBs, Funktionen, GVLs, Interfaces und Methoden sichtbar zu machen.
+- `plc_read_pou` implementieren, um Interface und Implementation eines POU gezielt zu lesen.
+- `plc_search_code` implementieren, um Code und Deklarationen mit Limits zu durchsuchen.
+- `plc_describe_pou` implementieren, um Art, Pfad/FQN, Deklarationen, Aufrufpunkte und Quellort zusammenzufassen.
+- `plc_list_libraries` und `plc_describe_library` pruefen, um installierte/referenzierte PLC-Bibliotheken sichtbar zu machen.
+- Schreibende Code-Tools wie `plc_update_pou`, `plc_create_pou`, `plc_delete_pou` erst nach stabilem Read-only-Design planen.
+
+### 19. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
+
+- `tc_build_project` oder `plc_build_project` evaluieren, je nachdem ob Build projektweit oder PLC-spezifisch sauberer modelliert ist.
+- `tc_error_list` fuer Engineering-/Compiler-/Parserfehler implementieren.
+- `tc_error_context` implementieren, um Fehler mit POU, Buffer, Datei, Zeile und Quelltextausschnitt zu verbinden.
+- `tc_output_read` implementieren, um Build-, Output- oder Engineering-Logs mit Filtern zu lesen.
+- `tc_build_and_get_errors` als begrenztes Kombi-Tool pruefen.
+- Ausgabe immer begrenzen und auf konkrete Fehlerreferenzen statt grosse Dumps optimieren.
+
+### 20. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
+
+- Stabile Resource-URI-Schemata fuer Engineering-Artefakte definieren, inspiriert von CoAgent:
+  `plcc://`, `plcpp://`, `err://`, `io://`, `tcfile://`, `tcfolder://`.
+- Tools sollen nach Moeglichkeit Referenzen zurueckgeben, statt grosse Code- oder Tree-Dumps direkt auszugeben.
+- Dereferenzierung fuer einzelne POU-, Fehler-, I/O- und Datei-Referenzen implementieren.
+- MCP Resources/Subscriptions fuer geeignete Artefakte pruefen, insbesondere Watches und Fehlerlisten.
+- URI-Schemata dokumentieren und versionieren, damit spaetere Tool-Erweiterungen kompatibel bleiben.
+
+### 21. HMI-Engineering-Kontext vorsichtig explorieren `[Open]`
+
+- HMI-Unterstuetzung zunaechst nur explorativ und read-only behandeln.
+- `hmi_state` pruefen, um aktive HMI-Projekte, Router-Port und Server-Port sichtbar zu machen.
+- `hmi_list_projects` und `hmi_preview_info` pruefen, falls ein stabiler HMI-Backend-Zugriff verfuegbar ist.
+- `hmi_list_controls` nur einfuehren, wenn Controls/Views verlaesslich aus Projektdateien oder Automation APIs gelesen werden koennen.
+- Keine HMI-Erzeugungs- oder Editier-Tools planen, bevor Sicherheitsmodell und Backend-Stabilitaet geklaert sind.
