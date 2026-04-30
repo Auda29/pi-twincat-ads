@@ -174,7 +174,7 @@ See `docs/migration.md` for package mapping and behavior notes.
 Release order:
 
 1. `twincat-mcp-core`
-2. `pi-twincat-ads@next`
+2. `pi-twincat-ads`
 3. `twincat-mcp`
 
 See `docs/release-flow.md` for publish checks, version policy, and the Pi npm

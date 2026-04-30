@@ -36,7 +36,7 @@ packages:
 ## Publish Order
 
 1. Publish `twincat-mcp-core`.
-2. Publish `pi-twincat-ads@next` after it resolves the freshly published core.
+2. Publish `pi-twincat-ads` after it resolves the freshly published core.
 3. Publish `twincat-mcp` after it resolves the freshly published core.
 
 The Pi and MCP packages both depend on the core package. Publishing the core
@@ -63,7 +63,7 @@ package's trusted publisher for GitHub Actions with repository
 | Package | Workflow | Release trigger | Default publish dist-tag |
 | --- | --- | --- | --- |
 | `twincat-mcp-core` | `publish-core.yml` | `core-v*` tag or Core GitHub Release | `latest` |
-| `pi-twincat-ads` | `publish-pi.yml` | successful Core publish workflow | `next` |
+| `pi-twincat-ads` | `publish-pi.yml` | successful Core publish workflow | `latest` |
 | `twincat-mcp` | `publish-mcp.yml` | successful Core publish workflow | `latest` |
 
 On npmjs.com, fill the Trusted Publisher form as:

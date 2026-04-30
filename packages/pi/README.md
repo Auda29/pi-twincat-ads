@@ -13,12 +13,6 @@ lifecycle hooks, context injection, and the bundled skill.
 pi install npm:pi-twincat-ads
 ```
 
-The prerelease channel can be installed explicitly with:
-
-```bash
-pi install npm:pi-twincat-ads@next
-```
-
 The package manifest registers:
 
 - extension entry: `./dist/pi-extension.js`

@@ -124,7 +124,7 @@ npm run test:mcp
 Publish Core before packages that depend on it:
 
 1. `twincat-mcp-core`
-2. `pi-twincat-ads@next`
+2. `pi-twincat-ads`
 3. `twincat-mcp`
 
 Source manifests keep internal dependencies on the matching released package
