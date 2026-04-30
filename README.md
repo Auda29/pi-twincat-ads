@@ -47,7 +47,7 @@ the usual choice when the host already has a working ADS router:
   "contextSnapshotSymbols": [],
   "notificationCycleTimeMs": 250,
   "maxNotifications": 128,
-  "maxWaitUntilMs": 120000,
+  "maxWaitUntilMs": 600000,
   "services": {
     "plc": {
       "targetAdsPort": 851,
@@ -103,7 +103,7 @@ Common fields:
 - `contextSnapshotSymbols`: symbols read for Pi lifecycle context
 - `notificationCycleTimeMs`: default watch cycle time, default `250`
 - `maxNotifications`: local notification cap, default `128`
-- `maxWaitUntilMs`: maximum accepted `plc_wait_until` timeout, default `120000`
+- `maxWaitUntilMs`: maximum accepted `plc_wait_until` timeout, default `600000`
 - `services.plc.targetAdsPort`: effective PLC ADS port, default `851`
 - `services.plc.symbolGroups`: named PLC symbol groups for `plc_read_group`
 - `services.nc.targetAdsPort`: NC ADS port reserved for multi-service use, default `500`

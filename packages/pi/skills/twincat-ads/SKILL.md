@@ -1,9 +1,11 @@
 ---
 name: twincat-ads
 description: >-
-  TwinCAT ADS via pi-twincat-ads (plc_state, plc_list_symbols, plc_read, plc_write,
-  plc_watch). Use when inspecting or changing TwinCAT PLC symbols, runtime state,
-  or ADS watches over a configured ADS connection.
+  TwinCAT ADS via pi-twincat-ads (plc_state, plc_list_symbols,
+  plc_describe_symbol, plc_read, plc_read_many, plc_list_groups,
+  plc_read_group, plc_write, plc_watch, plc_wait_until). Use when inspecting or
+  changing TwinCAT PLC symbols, runtime state, configured symbol groups, or ADS
+  watches over a configured ADS connection.
 ---
 
 # TwinCAT ADS Skill
@@ -14,19 +16,54 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 
 1. Start with `plc_state`.
 2. Use `plc_list_symbols` if the exact symbol path is not certain.
-3. Use `plc_read` or `plc_read_many` before making decisions.
-4. Only use `plc_write` after checking state, symbol path, and write permissions.
-5. Use `plc_watch` for ongoing observation and `plc_list_watches` to inspect current subscriptions.
-6. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
+3. Use `plc_describe_symbol` when type, size, array bounds, or struct members matter.
+4. Use `plc_list_groups` and `plc_read_group` when the config defines reusable PLC symbol groups.
+5. Use `plc_read` or `plc_read_many` before making decisions.
+6. Use `plc_wait_until` for a specific state transition or condition; use `plc_watch` for ongoing observation.
+7. Only use `plc_write` after checking state, symbol path, and write permissions.
+8. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
+9. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
 
 ## Tool guidance
 
 ### Discovery and reads
 
 - Prefer `plc_list_symbols` for discovery.
+- Use `plc_describe_symbol` after discovery when a symbol's shape matters:
+  - array dimensions or indexing
+  - struct fields or nested members
+  - PLC type names, byte size, or metadata
+  - validating that a symbol is the intended target before a write
 - Prefer `plc_read_many` when several related values are needed together.
 - Use `plc_state` to understand runtime mode, watch count, and current write availability.
 - If hooks return `failedSnapshots`, treat that as a configuration or PLC-symbol drift hint and verify the symbol names.
+
+### Symbol groups
+
+- Use `plc_list_groups` to inspect configured PLC symbol groups.
+- Use `plc_read_group` when a group captures a meaningful machine snapshot, such as state, mode, active step, alarms, or axis status.
+- Symbol groups are not created by `plc_list_groups` or `plc_read_group`.
+- Symbol groups are created in the Pi/TwinCAT ADS config under `services.plc.symbolGroups`.
+- If the user asks to create or change a group, propose the config edit and explain that the Pi extension must load that updated config before the tools can list or read the group.
+- A group is a named list of exact PLC symbol paths, for example:
+
+```json
+{
+  "services": {
+    "plc": {
+      "symbolGroups": {
+        "machine": ["MAIN.State", "MAIN.Mode", "MAIN.ActiveStep"],
+        "axisX": ["MAIN.AxisX.Status", "MAIN.AxisX.Position"]
+      }
+    }
+  }
+}
+```
+
+- Do not invent group names. Call `plc_list_groups` first unless the user or config context already gives an exact group name.
+- If a group read fails for one symbol, treat that as useful drift information and verify symbol names with `plc_list_symbols` or `plc_describe_symbol`.
+- A good group name is short and task-oriented, for example `machine`, `axisX`, `alarms`, `cycle`, or `safetyInputs`.
+- Build groups from symbols you have verified through `plc_list_symbols`, `plc_describe_symbol`, or successful reads.
 
 ### Finding symbol paths
 
@@ -71,6 +108,32 @@ Heuristics for common TwinCAT naming:
 - A fresh watch can already expose an initial `lastValue` and `lastTimestamp` when ADS provides `latestData`.
 - Use `plc_unwatch` when the observation is no longer needed.
 - Use `plc_list_watches` before creating duplicate observation plans.
+
+### Waiting for conditions
+
+- Use `plc_wait_until` when the user asks to wait for a specific PLC condition, transition, or readiness state.
+- Prefer `plc_wait_until` over manual polling loops when there is a clear condition and timeout.
+- Prefer `plc_wait_until` over `plc_watch` when you only need to know when a condition becomes true once.
+- Prefer `plc_watch` when the user wants ongoing monitoring, repeated updates, or a reusable subscription.
+- Use `stableForMs` when transient values should not count, for example waiting until a ready bit has stayed true for 500 ms.
+- Use `anyOf` for alternatives and `allOf` for combined readiness checks.
+- Keep timeouts bounded and operationally reasonable. If the wait times out, report the last observed values and suggest the next read or diagnostic step.
+- `plc_wait_until` waits only. Follow-up actions such as reads, diagnostics, or writes must be separate tool calls after the wait result is known.
+
+Example condition:
+
+```json
+{
+  "condition": {
+    "allOf": [
+      { "name": "MAIN.AxisReady", "operator": "equals", "value": true },
+      { "name": "MAIN.ActiveError", "operator": "equals", "value": false }
+    ]
+  },
+  "timeoutMs": 30000,
+  "stableForMs": 500
+}
+```
 
 ## Symbol naming
 

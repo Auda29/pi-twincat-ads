@@ -184,16 +184,17 @@ class MockClient extends EventEmitter {
   }
 
   async readPlcRuntimeState() {
-    return { adsState: 5, deviceState: 0 };
+    return { adsState: 5, adsStateStr: "Run", deviceState: 0 };
   }
 
   async readTcSystemState() {
-    return { adsState: 5, deviceState: 0 };
+    return { adsState: 5, adsStateStr: "Run", deviceState: 0 };
   }
 
   async readTcSystemExtendedState() {
     return {
       adsState: 5,
+      adsStateStr: "Run",
       deviceState: 0,
       restartIndex: 1,
       version: 3,
@@ -387,6 +388,36 @@ describe("AdsService", () => {
       { name: "nc", connected: true },
       { name: "io", connected: false },
     ]);
+  });
+
+  it("includes readable PLC runtime status in state results", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    const state = await service.readState();
+
+    expect(state.plcRuntimeState).toMatchObject({
+      adsState: 5,
+      deviceState: 0,
+    });
+    expect(state.plcRuntimeStatus).toEqual({
+      adsState: 5,
+      adsStateName: "Run",
+      deviceState: 0,
+      isRun: true,
+      isStop: false,
+    });
+    expect(state.tcSystemStatus.adsStateName).toBe("Run");
   });
 
   it("enforces the runtime write gate before writing", async () => {

@@ -8,7 +8,7 @@ export const DEFAULT_ROUTER_TCP_PORT = 48_898 as const;
 export const DEFAULT_LOCAL_ADS_PORT = 32_000 as const;
 export const DEFAULT_NOTIFICATION_CYCLE_TIME_MS = 250 as const;
 export const DEFAULT_MAX_NOTIFICATIONS = 128 as const;
-export const DEFAULT_MAX_WAIT_UNTIL_MS = 120_000 as const;
+export const DEFAULT_MAX_WAIT_UNTIL_MS = 600_000 as const;
 
 const amsNetIdSegmentSchema = z.coerce
   .number()

@@ -54,10 +54,52 @@ function formatSnapshotLine(snapshot: {
   return `- ${snapshot.name} = ${formatValue(snapshot.value)} (${snapshot.type}) @ ${snapshot.timestamp}`;
 }
 
+function formatAdsStateSummary(state: {
+  plcRuntimeStatus?: {
+    adsState: number;
+    adsStateName: string;
+    deviceState: number;
+    isRun: boolean;
+    isStop: boolean;
+  };
+  plcRuntimeState?: string | {
+    adsState: number;
+    adsStateStr?: string;
+    deviceState: number;
+  };
+}): string {
+  if (state.plcRuntimeStatus !== undefined) {
+    const status = state.plcRuntimeStatus;
+    return `${status.adsStateName} (adsState=${status.adsState}, deviceState=${status.deviceState})`;
+  }
+
+  if (
+    state.plcRuntimeState &&
+    typeof state.plcRuntimeState === "object" &&
+    "adsState" in state.plcRuntimeState
+  ) {
+    const runtimeState = state.plcRuntimeState;
+    return `${runtimeState.adsStateStr ?? `ADS state ${runtimeState.adsState}`} (adsState=${runtimeState.adsState}, deviceState=${runtimeState.deviceState})`;
+  }
+
+  return String(state.plcRuntimeState ?? "unknown");
+}
+
 function formatBootstrapSummary(summary: {
   state: {
     adsState: string;
-    plcRuntimeState: string;
+    plcRuntimeState?: string | {
+      adsState: number;
+      adsStateStr?: string;
+      deviceState: number;
+    };
+    plcRuntimeStatus?: {
+      adsState: number;
+      adsStateName: string;
+      deviceState: number;
+      isRun: boolean;
+      isStop: boolean;
+    };
     writeMode: string;
     watchCount: number;
     writePolicy: {
@@ -78,7 +120,7 @@ function formatBootstrapSummary(summary: {
   const lines = [
     "TwinCAT ADS bootstrap context:",
     `- ADS state: ${summary.state.adsState}`,
-    `- PLC runtime state: ${summary.state.plcRuntimeState}`,
+    `- PLC runtime state: ${formatAdsStateSummary(summary.state)}`,
     `- Runtime write mode: ${summary.state.writeMode}`,
     `- Active watches: ${summary.state.watchCount}`,
     `- Config read-only: ${summary.state.writePolicy.configReadOnly}`,
@@ -179,11 +221,22 @@ function formatToolSuccess(toolName: string, data: unknown): string {
   if (toolName === "plc_state") {
     const result = data as {
       adsState: string;
-      plcRuntimeState: string;
+      plcRuntimeState?: string | {
+        adsState: number;
+        adsStateStr?: string;
+        deviceState: number;
+      };
+      plcRuntimeStatus?: {
+        adsState: number;
+        adsStateName: string;
+        deviceState: number;
+        isRun: boolean;
+        isStop: boolean;
+      };
       writeMode: string;
       watchCount: number;
     };
-    return `ADS=${result.adsState}, PLC=${result.plcRuntimeState}, writeMode=${result.writeMode}, watches=${result.watchCount}`;
+    return `ADS=${result.adsState}, PLC=${formatAdsStateSummary(result)}, writeMode=${result.writeMode}, watches=${result.watchCount}`;
   }
 
   if (toolName === "plc_watch") {
@@ -595,12 +648,26 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     const registration = await getRegistration();
     const result = await runHook<{
-      state: { adsState: string; plcRuntimeState: string };
+      state: {
+        adsState: string;
+        plcRuntimeState?: string | {
+          adsState: number;
+          adsStateStr?: string;
+          deviceState: number;
+        };
+        plcRuntimeStatus?: {
+          adsState: number;
+          adsStateName: string;
+          deviceState: number;
+          isRun: boolean;
+          isStop: boolean;
+        };
+      };
       snapshotCount: number;
       failedSnapshots: string[];
     }>(registration, "session_start", {});
 
-    const status = `ADS ${result.state.adsState}, PLC ${result.state.plcRuntimeState}, snapshots ${result.snapshotCount}`;
+    const status = `ADS ${result.state.adsState}, PLC ${formatAdsStateSummary(result.state)}, snapshots ${result.snapshotCount}`;
     setStatus(ctx, status);
 
     if (result.failedSnapshots.length > 0) {
@@ -617,7 +684,18 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
       summary: {
         state: {
           adsState: string;
-          plcRuntimeState: string;
+          plcRuntimeState?: string | {
+            adsState: number;
+            adsStateStr?: string;
+            deviceState: number;
+          };
+          plcRuntimeStatus?: {
+            adsState: number;
+            adsStateName: string;
+            deviceState: number;
+            isRun: boolean;
+            isStop: boolean;
+          };
           writeMode: string;
           watchCount: number;
           writePolicy: {

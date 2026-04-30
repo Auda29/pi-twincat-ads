@@ -44,7 +44,7 @@ Default local config:
   "contextSnapshotSymbols": [],
   "notificationCycleTimeMs": 250,
   "maxNotifications": 128,
-  "maxWaitUntilMs": 120000,
+  "maxWaitUntilMs": 600000,
   "services": {
     "plc": {
       "targetAdsPort": 851,
@@ -74,6 +74,13 @@ Read and discovery:
 - `plc_list_groups`
 - `plc_read_group`
 - `plc_state`
+
+`plc_state` includes ADS connection state, write gates, watch count, and a
+readable PLC runtime status summary such as `Run` or `Stop`.
+
+Configured groups are created in config under `services.plc.symbolGroups`.
+`plc_list_groups` lists those group names and `plc_read_group` reads all
+symbols in one group.
 
 Write control:
 

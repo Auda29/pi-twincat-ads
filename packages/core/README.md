@@ -88,7 +88,7 @@ Router mode:
   "contextSnapshotSymbols": [],
   "notificationCycleTimeMs": 250,
   "maxNotifications": 128,
-  "maxWaitUntilMs": 120000,
+  "maxWaitUntilMs": 600000,
   "services": {
     "plc": {
       "targetAdsPort": 851,
@@ -139,6 +139,10 @@ top-level `targetAdsPort` remains accepted for compatibility. `services.nc` and
 `services.io` configure reusable ADS clients for NC and IO service layers.
 Configured PLC `symbolGroups` can be listed with `listGroups` and read with
 `readGroup`.
+
+`readState` returns ADS connection state, write policy, watch count, raw ADS
+state objects, and readable PLC/TwinCAT state summaries such as `Run` or
+`Stop` in `plcRuntimeStatus` and `tcSystemStatus`.
 
 ## Safety Model
 

@@ -25,7 +25,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 export const packageName = "twincat-mcp";
-export const packageVersion = "0.3.1";
+export const packageVersion = "0.3.2";
 
 const symbolNameSchema = z
   .string()

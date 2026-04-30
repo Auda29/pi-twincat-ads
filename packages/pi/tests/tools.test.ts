@@ -72,7 +72,21 @@ function createRuntimeStub() {
         allowlistCount: 0,
       },
       plcRuntimeState: { adsState: 5, deviceState: 0 },
+      plcRuntimeStatus: {
+        adsState: 5,
+        adsStateName: "Run",
+        deviceState: 0,
+        isRun: true,
+        isStop: false,
+      },
       tcSystemState: { adsState: 5, deviceState: 0 },
+      tcSystemStatus: {
+        adsState: 5,
+        adsStateName: "Run",
+        deviceState: 0,
+        isRun: true,
+        isStop: false,
+      },
       tcSystemExtendedState: {
         adsState: 5,
         deviceState: 0,

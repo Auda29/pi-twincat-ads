@@ -107,6 +107,14 @@ export interface PlcWatchSnapshot<T = unknown> {
   readonly lastTimestamp?: string;
 }
 
+export interface AdsStateSummary {
+  readonly adsState: number;
+  readonly adsStateName: string;
+  readonly deviceState: number;
+  readonly isRun: boolean;
+  readonly isStop: boolean;
+}
+
 export interface PlcStateResult {
   readonly connection: AdsClientConnection;
   readonly adsState: AdsConnectionState;
@@ -118,7 +126,9 @@ export interface PlcStateResult {
     readonly allowlistCount: number;
   };
   readonly plcRuntimeState: AdsState;
+  readonly plcRuntimeStatus: AdsStateSummary;
   readonly tcSystemState: AdsState;
+  readonly tcSystemStatus: AdsStateSummary;
   readonly tcSystemExtendedState: AdsTcSystemExtendedState;
   readonly deviceInfo: AdsClientDeviceInfo;
 }
@@ -208,8 +218,48 @@ export interface PlcWaitUntilResult {
   readonly values: PlcWaitValueSnapshot[];
 }
 
+const ADS_STATE_RUN = 5;
+const ADS_STATE_STOP = 6;
+const ADS_STATE_NAMES = new Map<number, string>([
+  [0, "Invalid"],
+  [1, "Idle"],
+  [2, "Reset"],
+  [3, "Initialize"],
+  [4, "Start"],
+  [ADS_STATE_RUN, "Run"],
+  [ADS_STATE_STOP, "Stop"],
+  [7, "SaveConfig"],
+  [8, "LoadConfig"],
+  [9, "PowerFailure"],
+  [10, "PowerGood"],
+  [11, "Error"],
+  [12, "Shutdown"],
+  [13, "Suspend"],
+  [14, "Resume"],
+  [15, "Config"],
+  [16, "Reconfig"],
+  [17, "Stopping"],
+  [18, "Incompatible"],
+  [19, "Exception"],
+]);
+
 export class WriteDeniedError extends Error {
   readonly code = "WRITE_DENIED" as const;
+}
+
+function summarizeAdsState(state: AdsState): AdsStateSummary {
+  const adsStateName =
+    state.adsStateStr ??
+    ADS_STATE_NAMES.get(state.adsState) ??
+    `Unknown(${state.adsState})`;
+
+  return {
+    adsState: state.adsState,
+    adsStateName,
+    deviceState: state.deviceState,
+    isRun: state.adsState === ADS_STATE_RUN,
+    isStop: state.adsState === ADS_STATE_STOP,
+  };
 }
 
 export interface WatchSymbolOptions {
@@ -960,7 +1010,9 @@ export class AdsService {
         allowlistCount: this.config.writeAllowlist.length,
       },
       plcRuntimeState,
+      plcRuntimeStatus: summarizeAdsState(plcRuntimeState),
       tcSystemState,
+      tcSystemStatus: summarizeAdsState(tcSystemState),
       tcSystemExtendedState,
       deviceInfo,
     };

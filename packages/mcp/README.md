@@ -31,7 +31,7 @@ Config can also be supplied with environment variables:
 - `TWINCAT_ADS_CONTEXT_SNAPSHOT_SYMBOLS=MAIN.someValue`
 - `TWINCAT_ADS_NOTIFICATION_CYCLE_TIME_MS=250`
 - `TWINCAT_ADS_MAX_NOTIFICATIONS=128`
-- `TWINCAT_ADS_MAX_WAIT_UNTIL_MS=120000`
+- `TWINCAT_ADS_MAX_WAIT_UNTIL_MS=600000`
 
 Direct mode additionally uses:
 
@@ -51,7 +51,7 @@ Direct mode additionally uses:
   "writeAllowlist": [],
   "notificationCycleTimeMs": 250,
   "maxNotifications": 128,
-  "maxWaitUntilMs": 120000,
+  "maxWaitUntilMs": 600000,
   "services": {
     "plc": {
       "targetAdsPort": 851,
@@ -83,6 +83,9 @@ PLC reads and state:
 - `plc_list_groups`
 - `plc_read_group`
 - `plc_state`
+
+`plc_state` includes ADS connection state, write gates, watch count, and a
+readable PLC runtime status summary such as `Run` or `Stop`.
 
 Writes and write gates:
 
