@@ -43,17 +43,28 @@ The Pi and MCP packages both depend on the core package. Publishing the core
 first avoids consumers receiving package metadata that points at an unavailable
 runtime dependency.
 
+For lockstep releases, push the Core release tag first:
+
+```sh
+git push origin core-vX.Y.Z
+```
+
+After the Core publish workflow completes successfully, the Pi and MCP publish
+workflows start automatically from the same commit through `workflow_run`. Pi
+and MCP package tags may be pushed afterwards as release markers; they do not
+start publish jobs.
+
 ## Package Publish Workflows
 
 The package publish workflows use npm trusted publishing. Configure each npm
 package's trusted publisher for GitHub Actions with repository
 `Auda29/twincat-mcp-mono` and the matching workflow filename:
 
-| Package | Workflow | Release tag prefix | Default publish dist-tag |
+| Package | Workflow | Release trigger | Default publish dist-tag |
 | --- | --- | --- | --- |
-| `twincat-mcp-core` | `publish-core.yml` | `core-v*` | `latest` |
-| `pi-twincat-ads` | `publish-pi.yml` | `pi-v*` | `next` |
-| `twincat-mcp` | `publish-mcp.yml` | `mcp-v*` | `latest` |
+| `twincat-mcp-core` | `publish-core.yml` | `core-v*` tag or Core GitHub Release | `latest` |
+| `pi-twincat-ads` | `publish-pi.yml` | successful Core publish workflow | `next` |
+| `twincat-mcp` | `publish-mcp.yml` | successful Core publish workflow | `latest` |
 
 On npmjs.com, fill the Trusted Publisher form as:
 
@@ -64,13 +75,13 @@ On npmjs.com, fill the Trusted Publisher form as:
   Actions environment with the same name
 
 Each workflow can be started manually with `workflow_dispatch`, by pushing a
-matching package version tag, or by publishing a GitHub Release whose tag uses
-the matching prefix. Manual runs are always `--dry-run`; only version tags or
-published releases run the real publish step. npm automatically generates
-provenance for trusted publishing from this public repository. Publish jobs skip
-the publish step when the package version already exists on npm, so backfilled
-release marker tags can still run the verification pipeline.
-Releases for other package tag prefixes are ignored by each package publish job.
+Core package version tag, or by publishing a Core GitHub Release whose tag uses
+the `core-v*` prefix. The Pi and MCP workflows start automatically after a
+successful Core workflow for a `core-v*` tag. Manual runs are always `--dry-run`;
+only Core version tags, Core published releases, or Core-triggered follow-up
+runs execute the real publish step. npm automatically generates provenance for
+trusted publishing from this public repository. Publish jobs skip the publish
+step when the package version already exists on npm, so reruns remain safe.
 
 ## Changesets Preparation
 

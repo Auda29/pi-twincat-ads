@@ -11,12 +11,11 @@ on:
         options:
           - next
           - latest
-  release:
+  workflow_run:
+    workflows:
+      - Publish Core Package
     types:
-      - published
-  push:
-    tags:
-      - "pi-v*"
+      - completed
 
 permissions:
   contents: read
@@ -29,7 +28,7 @@ concurrency:
 jobs:
   publish-pi:
     name: Publish pi-twincat-ads
-    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'pi-v') }}
+    if: ${{ github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'core-v')) }}
     runs-on: ubuntu-latest
     env:
       NPM_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.npm_tag || 'next' }}
@@ -37,6 +36,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -44,21 +45,17 @@ jobs:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
 
-      - name: Validate Pi version tag
+      - name: Validate Pi version from Core tag
         if: ${{ github.event_name != 'workflow_dispatch' }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG_NAME="${{ github.event.release.tag_name }}"
-          else
-            TAG_NAME="${GITHUB_REF_NAME}"
-          fi
+          TAG_NAME="${{ github.event.workflow_run.head_branch }}"
 
-          if ! printf '%s\n' "$TAG_NAME" | grep -Eq '^pi-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "Expected a Pi version tag like pi-v0.2.2 or pi-v0.2.2-next.0, got: $TAG_NAME" >&2
+          if ! printf '%s\n' "$TAG_NAME" | grep -Eq '^core-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "Expected a Core version tag like core-v0.3.1 or core-v0.3.1-next.0, got: $TAG_NAME" >&2
             exit 1
           fi
 
-          TAG_VERSION="${TAG_NAME#pi-v}"
+          TAG_VERSION="${TAG_NAME#core-v}"
           PACKAGE_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('packages/pi/package.json', 'utf8')).version")"
 
           if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
