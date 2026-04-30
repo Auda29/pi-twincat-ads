@@ -27,8 +27,15 @@ import {
 const config = normalizeTwinCatAdsConfig({
   connectionMode: "router",
   targetAmsNetId: "localhost",
-  targetAdsPort: 851,
   readOnly: true,
+  services: {
+    plc: {
+      targetAdsPort: 851,
+      symbolGroups: {
+        machine: ["MAIN.State", "MAIN.Mode"],
+      },
+    },
+  },
 });
 
 const service = new AdsService(config);
@@ -47,10 +54,14 @@ The runtime exposes transport-free PLC operations:
 - `connect`
 - `disconnect`
 - `listSymbols`
+- `describeSymbol`
 - `readSymbol`
 - `readMany`
+- `listGroups`
+- `readGroup`
 - `writeSymbol`
 - `watchSymbol`
+- `waitUntil`
 - `unwatchSymbol`
 - `listWatches`
 - `readState`
@@ -73,7 +84,23 @@ Router mode:
   "targetAmsNetId": "localhost",
   "targetAdsPort": 851,
   "readOnly": true,
-  "writeAllowlist": []
+  "writeAllowlist": [],
+  "contextSnapshotSymbols": [],
+  "notificationCycleTimeMs": 250,
+  "maxNotifications": 128,
+  "maxWaitUntilMs": 120000,
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {}
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
 
@@ -89,9 +116,29 @@ Direct mode:
   "localAmsNetId": "192.168.1.50.1.1",
   "localAdsPort": 32000,
   "readOnly": true,
-  "writeAllowlist": []
+  "writeAllowlist": [],
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {
+        "machine": ["MAIN.State", "MAIN.Mode"]
+      }
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
+
+`services.plc.targetAdsPort` is the effective PLC ADS port when present. The
+top-level `targetAdsPort` remains accepted for compatibility. `services.nc` and
+`services.io` configure reusable ADS clients for NC and IO service layers.
+Configured PLC `symbolGroups` can be listed with `listGroups` and read with
+`readGroup`.
 
 ## Safety Model
 

@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
@@ -107,4 +107,4 @@ jobs:
 
       - name: Publish Pi package
         if: ${{ github.event_name != 'workflow_dispatch' && steps.published.outputs.published != 'true' }}
-        run: npm publish -w pi-twincat-ads --tag "$NPM_TAG" --access public --provenance
+        run: npm publish -w pi-twincat-ads --tag "$NPM_TAG" --access public

@@ -13,6 +13,12 @@ lifecycle hooks, context injection, and the bundled skill.
 pi install npm:pi-twincat-ads
 ```
 
+The prerelease channel can be installed explicitly with:
+
+```bash
+pi install npm:pi-twincat-ads@next
+```
+
 The package manifest registers:
 
 - extension entry: `./dist/pi-extension.js`
@@ -37,7 +43,20 @@ Default local config:
   "writeAllowlist": [],
   "contextSnapshotSymbols": [],
   "notificationCycleTimeMs": 250,
-  "maxNotifications": 128
+  "maxNotifications": 128,
+  "maxWaitUntilMs": 120000,
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {}
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
 
@@ -49,8 +68,11 @@ For direct mode, include `routerAddress`, `routerTcpPort`, `localAmsNetId`, and
 Read and discovery:
 
 - `plc_list_symbols`
+- `plc_describe_symbol`
 - `plc_read`
 - `plc_read_many`
+- `plc_list_groups`
+- `plc_read_group`
 - `plc_state`
 
 Write control:
@@ -61,6 +83,7 @@ Write control:
 Watches:
 
 - `plc_watch`
+- `plc_wait_until`
 - `plc_unwatch`
 - `plc_list_watches`
 

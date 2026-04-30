@@ -55,10 +55,19 @@ package's trusted publisher for GitHub Actions with repository
 | `pi-twincat-ads` | `publish-pi.yml` | `pi-v*` | `next` |
 | `twincat-mcp` | `publish-mcp.yml` | `mcp-v*` | `latest` |
 
+On npmjs.com, fill the Trusted Publisher form as:
+
+- Organization or user: `Auda29`
+- Repository: `twincat-mcp-mono`
+- Workflow filename: the package-specific filename from the table above
+- Environment name: leave empty unless the workflow job also declares a GitHub
+  Actions environment with the same name
+
 Each workflow can be started manually with `workflow_dispatch`, by pushing a
 matching package version tag, or by publishing a GitHub Release whose tag uses
 the matching prefix. Manual runs are always `--dry-run`; only version tags or
-published releases run the real publish step with provenance. Publish jobs skip
+published releases run the real publish step. npm automatically generates
+provenance for trusted publishing from this public repository. Publish jobs skip
 the publish step when the package version already exists on npm, so backfilled
 release marker tags can still run the verification pipeline.
 Releases for other package tag prefixes are ignored by each package publish job.

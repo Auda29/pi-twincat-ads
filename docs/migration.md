@@ -70,12 +70,16 @@ Pi adapter code should use the Core runtime boundary instead of direct
 The current Pi package exposes:
 
 - `plc_list_symbols`
+- `plc_describe_symbol`
 - `plc_read`
 - `plc_read_many`
+- `plc_list_groups`
+- `plc_read_group`
 - `plc_state`
 - `plc_set_write_mode`
 - `plc_write`
 - `plc_watch`
+- `plc_wait_until`
 - `plc_unwatch`
 - `plc_list_watches`
 
@@ -121,7 +125,7 @@ Publish Core before packages that depend on it:
 
 1. `twincat-mcp-core`
 2. `pi-twincat-ads@next`
-3. `twincat-mcp@0.1.0`
+3. `twincat-mcp`
 
 Source manifests keep internal dependencies on the matching released package
 version so local npm installs and published tarballs use the same dependency

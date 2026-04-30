@@ -29,6 +29,9 @@ Config can also be supplied with environment variables:
 - `TWINCAT_ADS_READ_ONLY=true`
 - `TWINCAT_ADS_WRITE_ALLOWLIST=MAIN.safeValue,MAIN.otherSafeValue`
 - `TWINCAT_ADS_CONTEXT_SNAPSHOT_SYMBOLS=MAIN.someValue`
+- `TWINCAT_ADS_NOTIFICATION_CYCLE_TIME_MS=250`
+- `TWINCAT_ADS_MAX_NOTIFICATIONS=128`
+- `TWINCAT_ADS_MAX_WAIT_UNTIL_MS=120000`
 
 Direct mode additionally uses:
 
@@ -47,7 +50,20 @@ Direct mode additionally uses:
   "readOnly": true,
   "writeAllowlist": [],
   "notificationCycleTimeMs": 250,
-  "maxNotifications": 128
+  "maxNotifications": 128,
+  "maxWaitUntilMs": 120000,
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {}
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
 
@@ -61,8 +77,11 @@ Connection:
 PLC reads and state:
 
 - `plc_list_symbols`
+- `plc_describe_symbol`
 - `plc_read`
 - `plc_read_many`
+- `plc_list_groups`
+- `plc_read_group`
 - `plc_state`
 
 Writes and write gates:
@@ -75,10 +94,11 @@ Writes and write gates:
 Watches:
 
 - `plc_watch`
+- `plc_wait_until`
 - `plc_unwatch`
 - `plc_list_watches`
 
-In v0.1, watches are modeled only as tools. They are not MCP resources or
+Watches are modeled only as tools. They are not MCP resources or
 subscriptions yet.
 
 ## Safety Model

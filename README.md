@@ -46,7 +46,20 @@ the usual choice when the host already has a working ADS router:
   "writeAllowlist": [],
   "contextSnapshotSymbols": [],
   "notificationCycleTimeMs": 250,
-  "maxNotifications": 128
+  "maxNotifications": 128,
+  "maxWaitUntilMs": 120000,
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {}
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
 
@@ -63,7 +76,21 @@ connects directly to the PLC or router endpoint:
   "localAmsNetId": "192.168.1.50.1.1",
   "localAdsPort": 32000,
   "readOnly": true,
-  "writeAllowlist": []
+  "writeAllowlist": [],
+  "services": {
+    "plc": {
+      "targetAdsPort": 851,
+      "symbolGroups": {
+        "machine": ["MAIN.State", "MAIN.Mode"]
+      }
+    },
+    "nc": {
+      "targetAdsPort": 500
+    },
+    "io": {
+      "targetAdsPort": 300
+    }
+  }
 }
 ```
 
@@ -76,6 +103,11 @@ Common fields:
 - `contextSnapshotSymbols`: symbols read for Pi lifecycle context
 - `notificationCycleTimeMs`: default watch cycle time, default `250`
 - `maxNotifications`: local notification cap, default `128`
+- `maxWaitUntilMs`: maximum accepted `plc_wait_until` timeout, default `120000`
+- `services.plc.targetAdsPort`: effective PLC ADS port, default `851`
+- `services.plc.symbolGroups`: named PLC symbol groups for `plc_read_group`
+- `services.nc.targetAdsPort`: NC ADS port reserved for multi-service use, default `500`
+- `services.io.targetAdsPort`: IO ADS port reserved for multi-service use, default `300`
 
 ## Safety Model
 
@@ -121,7 +153,8 @@ twincat-mcp --config ./plc.config.json
 ```
 
 Config can also be supplied with `TWINCAT_ADS_CONFIG` or environment variables
-such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP v0.1 exposes PLC operations as
+such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP exposes PLC reads, writes,
+symbol description, configured groups, watches, and wait-until operations as
 tools. Watches are modeled as normal tools, not as MCP resources or
 subscriptions yet.
 

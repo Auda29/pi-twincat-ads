@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
@@ -54,7 +54,7 @@ jobs:
           fi
 
           if ! printf '%s\n' "$TAG_NAME" | grep -Eq '^mcp-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "Expected an MCP version tag like mcp-v0.1.0 or mcp-v0.1.0-next.0, got: $TAG_NAME" >&2
+            echo "Expected an MCP version tag like mcp-v0.3.0 or mcp-v0.3.0-next.0, got: $TAG_NAME" >&2
             exit 1
           fi
 
@@ -107,4 +107,4 @@ jobs:
 
       - name: Publish MCP package
         if: ${{ github.event_name != 'workflow_dispatch' && steps.published.outputs.published != 'true' }}
-        run: npm publish -w twincat-mcp --tag "$NPM_TAG" --access public --provenance
+        run: npm publish -w twincat-mcp --tag "$NPM_TAG" --access public
