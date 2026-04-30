@@ -83,7 +83,7 @@ Engineering-Backends bleiben. Projektbaum-, POU-Code-, Build- und
 Engineering-Fehlerlisten werden fuer Phase 3 vorgemerkt, damit Phase 2
 lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 
-### 10. Multi-Service-ADS-Basis fuer PLC, NC und IO vorbereiten `[Open]`
+### 10. Multi-Service-ADS-Basis fuer PLC, NC und IO vorbereiten `[Done]`
 
 - Interne ADS-Service-Schicht so erweitern, dass mehrere TwinCAT-Services/Ports verwaltet werden koennen.
 - Config-Modell um klar benannte Services erweitern, z. B. `plc`, `nc` und `io`.
@@ -95,7 +95,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - Bestehende PLC-Tools kompatibel halten und intern auf die neue Service-Schicht migrieren.
 - Gemeinsames Connection-, Reconnect-, Timeout- und State-Handling fuer alle Services wiederverwenden.
 
-### 11. PLC-Tools um Symbolbeschreibung und Gruppen erweitern `[Open]`
+### 11. PLC-Tools um Symbolbeschreibung und Gruppen erweitern `[Done]`
 
 - Bestehende `plc_*` Tools unveraendert weiterfuehren.
 - `plc_describe_symbol` ergaenzen, um Typ, Groesse, Metadaten und Struct-/Array-Informationen zu einem Symbol zu liefern.
@@ -105,7 +105,19 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - Watch-Snapshots fuer konfigurierte Gruppen pruefen, aber erst einfuehren, wenn die Ausgabe weiterhin kompakt bleibt.
 - Tests fuer Symbolbeschreibung, unbekannte Symbole und Gruppen-Reads ergaenzen.
 
-### 12. NC-Read-Only-Tools einfuehren `[Open]`
+### 12. Reaktive PLC-Wait-/Trigger-Tools einfuehren `[Done]`
+
+- `plc_wait_until` implementieren, um eine oder mehrere PLC-Variablen zu beobachten, bis eine definierte Bedingung erfuellt ist.
+- Intern ADS-Notifications bevorzugen und nur bei Bedarf auf zyklisches Lesen zurueckfallen.
+- Bedingungsmodell bewusst klein halten, z. B. `equals`, `notEquals`, Vergleichsoperatoren fuer Zahlen, `allOf` und `anyOf`.
+- Optional `stableForMs` unterstuetzen, damit ein Zustand fuer eine Mindestdauer stabil sein muss, bevor das Tool zurueckkehrt.
+- Optional `cycleTimeMs` und `maxDelayMs` an die bestehende Watch-/Notification-Konfiguration anbinden.
+- Harte Laufzeitgrenzen vorsehen: `timeoutMs` im Tool-Input, konfigurierbares Maximum und saubere Cancel-/Abort-Behandlung.
+- Ergebnis kompakt strukturieren: ausgeloeste Bedingung, letzte Werte, Timestamps, Dauer und Timeout-/Cancel-Status.
+- Dokumentieren, dass das Tool nur auf das Ereignis wartet; Folgeaktionen wie `tc_diagnose_errors`, `plc_read_group` oder `tc_diagnose_runtime` fuehrt der Agent danach als separate Toolcalls aus.
+- Tests fuer Erfolg, Timeout, Cancel, Mehrsymbol-Bedingungen und stabile Zustandsdauer ergaenzen.
+
+### 13. NC-Read-Only-Tools einfuehren `[Open]`
 
 - NC-Zugriff zunaechst strikt read-only halten.
 - Config fuer NC-Achsen definieren, z. B. Name, Achs-ID und optional Service-Port.
@@ -114,7 +126,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - `nc_read_axis` und `nc_read_axis_many` implementieren, um Achszustand, Position, Geschwindigkeit, Status und Fehler gezielt zu lesen.
 - `nc_read_error` implementieren, um NC- oder Achsenfehler fokussiert auszulesen.
 
-### 13. IO-Read-Only-Tools und IO-Gruppen einfuehren `[Open]`
+### 14. IO-Read-Only-Tools und IO-Gruppen einfuehren `[Open]`
 
 - IO-Zugriff zunaechst strikt read-only halten.
 - Config fuer einzelne IO-Datenpunkte definieren: Name, `indexGroup`, `indexOffset`, Typ und optional Beschreibung.
@@ -123,9 +135,9 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - `io_read_group` implementieren, um eine konfigurierte IO-Gruppe zu lesen.
 - `io_list_groups` implementieren, um verfuegbare IO-Gruppen und Datenpunkte sichtbar zu machen.
 
-### 14. TwinCAT-weite Diagnose-Tools fuer Fehler, Events und Output ergaenzen `[Open]`
+### 15. TwinCAT-weite Diagnose-Tools fuer Fehler, Events und Output ergaenzen `[Open]`
 
-- Backends fuer Runtime-Events und Runtime-Logs evaluieren, bevor die Tool-API festgezurrt wird.
+- Backends fuer Runtime-Events und Runtime-Logs evaluieren, bevor die Tool-API festgezurrt wird. `[Done: docs/runtime-events-logs-backends.md]`
 - Engineering-Fehlerlisten, Build-Ausgaben und XAE-Output-Fenster nicht in Phase 2 implementieren; diese gehoeren in Phase 3.
 - `tc_state` implementieren, um TwinCAT-/ADS-/PLC-/NC-Grundzustand kompakt zu pruefen.
 - `tc_event_list` implementieren, um letzte TwinCAT/EventLogger-Meldungen zu lesen.
@@ -134,7 +146,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - Quellen fuer Events und Runtime-Logs konfigurierbar halten.
 - Filter wie `limit`, `since`, `severity` und Textsuche vorsehen, damit die Tools keine grossen unkontrollierten Dumps erzeugen.
 
-### 15. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Open]`
+### 16. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Open]`
 
 - Kein globales "alles auslesen"-Tool einfuehren.
 - `tc_diagnose_errors` als kleine Kombination aus Runtime-Fehlern, Runtime-Logs und letzten Events implementieren.
@@ -150,7 +162,7 @@ offene TwinCAT-XAE-/Visual-Studio-Projekte. Die Tool-Oberflaeche soll klar von
 den ADS-Runtime-Tools getrennt bleiben, weil Verfuegbarkeit, Berechtigungen und
 Fehlerbilder andere sind.
 
-### 16. Engineering-Backend und Projektkontext evaluieren `[Open]`
+### 17. Engineering-Backend und Projektkontext evaluieren `[Open]`
 
 - Verfuegbare Backends fuer XAE-/Visual-Studio-Projektzugriff evaluieren:
   Automation Interface, DTE/VS-Integration, TcXaeShell-Kontext, GAS/WebSocket
@@ -161,7 +173,7 @@ Fehlerbilder andere sind.
 - `tc_project_state` definieren, um Projektdatei, Projekttyp, aktive Verbindung und Backend-Quelle kompakt auszugeben.
 - Backend-Faehigkeiten explizit melden, z. B. `runtimeOnly`, `engineeringRead`, `engineeringWrite`.
 
-### 17. SysManager-Tree und I/O-Topologie als Engineering-Kontext lesen `[Open]`
+### 18. SysManager-Tree und I/O-Topologie als Engineering-Kontext lesen `[Open]`
 
 - Read-only-Zugriff auf den SysManager-Baum evaluieren.
 - `tc_tree_read` implementieren, um einen konfigurierten oder angegebenen Tree-Pfad gezielt zu lesen.
@@ -171,7 +183,7 @@ Fehlerbilder andere sind.
 - `io_describe_device` und `io_describe_terminal` fuer Geraete/Klemmen pruefen.
 - Schreibende Tree-Operationen wie Create/Rename/Delete nur als spaetere, separat gegatete Phase vormerken.
 
-### 18. PLC-Code-, POU- und Library-Kontext read-only einfuehren `[Open]`
+### 19. PLC-Code-, POU- und Library-Kontext read-only einfuehren `[Open]`
 
 - Classic PLC und PLC++/dateibasierte Projekte getrennt modellieren.
 - `plc_list_pous` implementieren, um Programme, FBs, Funktionen, GVLs, Interfaces und Methoden sichtbar zu machen.
@@ -181,7 +193,7 @@ Fehlerbilder andere sind.
 - `plc_list_libraries` und `plc_describe_library` pruefen, um installierte/referenzierte PLC-Bibliotheken sichtbar zu machen.
 - Schreibende Code-Tools wie `plc_update_pou`, `plc_create_pou`, `plc_delete_pou` erst nach stabilem Read-only-Design planen.
 
-### 19. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
+### 20. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
 
 - `tc_build_project` oder `plc_build_project` evaluieren, je nachdem ob Build projektweit oder PLC-spezifisch sauberer modelliert ist.
 - `tc_error_list` fuer Engineering-/Compiler-/Parserfehler implementieren.
@@ -190,7 +202,7 @@ Fehlerbilder andere sind.
 - `tc_build_and_get_errors` als begrenztes Kombi-Tool pruefen.
 - Ausgabe immer begrenzen und auf konkrete Fehlerreferenzen statt grosse Dumps optimieren.
 
-### 20. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
+### 21. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
 
 - Stabile Resource-URI-Schemata fuer Engineering-Artefakte definieren, inspiriert von CoAgent:
   `plcc://`, `plcpp://`, `err://`, `io://`, `tcfile://`, `tcfolder://`.
@@ -199,7 +211,7 @@ Fehlerbilder andere sind.
 - MCP Resources/Subscriptions fuer geeignete Artefakte pruefen, insbesondere Watches und Fehlerlisten.
 - URI-Schemata dokumentieren und versionieren, damit spaetere Tool-Erweiterungen kompatibel bleiben.
 
-### 21. HMI-Engineering-Kontext vorsichtig explorieren `[Open]`
+### 22. HMI-Engineering-Kontext vorsichtig explorieren `[Open]`
 
 - HMI-Unterstuetzung zunaechst nur explorativ und read-only behandeln.
 - `hmi_state` pruefen, um aktive HMI-Projekte, Router-Port und Server-Port sichtbar zu machen.

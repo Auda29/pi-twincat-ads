@@ -2,11 +2,15 @@ import { z } from "zod";
 
 import {
   WriteDeniedError,
+  type PlcReadGroupResult,
   type PlcReadResult,
   type PlcStateResult,
+  type PlcSymbolDescription,
+  type PlcSymbolGroupSummary,
   type PlcSymbolSummary,
   type PlcWatchMode,
   type PlcWatchSnapshot,
+  type PlcWaitUntilResult,
   type PlcWriteModeResult,
   type TwinCatAdsRuntime,
 } from "twincat-mcp-core";
@@ -29,6 +33,7 @@ const readInputSchema = z
     name: symbolNameSchema,
   })
   .strict();
+const describeSymbolInputSchema = readInputSchema;
 
 const readManyInputSchema = z
   .object({
@@ -36,6 +41,12 @@ const readManyInputSchema = z
       .array(symbolNameSchema)
       .min(1, "At least one PLC symbol is required.")
       .max(100, "At most 100 PLC symbols can be read at once."),
+  })
+  .strict();
+
+const readGroupInputSchema = z
+  .object({
+    group: z.string().trim().min(1, "PLC symbol group must not be empty."),
   })
   .strict();
 
@@ -81,8 +92,79 @@ const unwatchInputSchema = z
 
 const listWatchesInputSchema = z.object({}).strict();
 
+const waitComparisonOperatorSchema = z.enum([
+  "equals",
+  "notEquals",
+  "greaterThan",
+  "greaterThanOrEquals",
+  "lessThan",
+  "lessThanOrEquals",
+]);
+type WaitConditionInput =
+  | {
+      readonly name: string;
+      readonly operator: z.infer<typeof waitComparisonOperatorSchema>;
+      readonly value?: unknown;
+    }
+  | { readonly allOf: readonly WaitConditionInput[] }
+  | { readonly anyOf: readonly WaitConditionInput[] };
+const waitConditionSchema: z.ZodType<WaitConditionInput> = z.lazy(() =>
+  z.union([
+    z
+      .object({
+        name: symbolNameSchema,
+        operator: waitComparisonOperatorSchema,
+        value: z.unknown(),
+      })
+      .strict(),
+    z
+      .object({
+        allOf: z
+          .array(waitConditionSchema)
+          .min(1, "allOf must contain at least one condition."),
+      })
+      .strict(),
+    z
+      .object({
+        anyOf: z
+          .array(waitConditionSchema)
+          .min(1, "anyOf must contain at least one condition."),
+      })
+      .strict(),
+  ]),
+);
+const waitUntilInputSchema = z
+  .object({
+    condition: waitConditionSchema,
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1, "Wait timeout must be at least 1 ms.")
+      .max(3_600_000, "Wait timeout must be 3600000 ms or lower."),
+    stableForMs: z
+      .number()
+      .int()
+      .min(0, "Stable duration must be 0 ms or higher.")
+      .max(3_600_000, "Stable duration must be 3600000 ms or lower.")
+      .optional(),
+    cycleTimeMs: z
+      .number()
+      .int()
+      .min(10, "Watch cycle time must be at least 10 ms.")
+      .max(60_000, "Watch cycle time must be 60000 ms or lower.")
+      .optional(),
+    maxDelayMs: z
+      .number()
+      .int()
+      .min(0, "Watch max delay must be 0 ms or higher.")
+      .max(60_000, "Watch max delay must be 60000 ms or lower.")
+      .optional(),
+  })
+  .strict();
+
 export interface ToolHandlerContext {
   readonly runtime: TwinCatAdsRuntime;
+  readonly signal?: AbortSignal;
 }
 
 export interface ToolSuccessResult<TOutput> {
@@ -120,12 +202,22 @@ export interface PlcListSymbolsToolOutput {
   readonly symbols: PlcSymbolSummary[];
   readonly count: number;
 }
+export interface PlcDescribeSymbolToolOutput {
+  readonly symbol: PlcSymbolDescription;
+}
 export interface PlcReadToolOutput {
   readonly result: PlcReadResult;
 }
 export interface PlcReadManyToolOutput {
   readonly results: PlcReadResult[];
   readonly count: number;
+}
+export interface PlcListGroupsToolOutput {
+  readonly groups: PlcSymbolGroupSummary[];
+  readonly count: number;
+}
+export interface PlcReadGroupToolOutput {
+  readonly group: PlcReadGroupResult;
 }
 export interface PlcWriteToolOutput {
   readonly result: {
@@ -146,6 +238,7 @@ export interface PlcListWatchesToolOutput {
   readonly watches: PlcWatchSnapshot[];
   readonly count: number;
 }
+export interface PlcWaitUntilToolOutput extends PlcWaitUntilResult {}
 
 function normalizeToolError(error: unknown): ToolFailureResult {
   if (error instanceof z.ZodError) {
@@ -224,8 +317,14 @@ function createToolDefinition<TInput, TOutput>(options: {
 
 export function createToolDefinitions(): Array<
   | ToolDefinition<z.infer<typeof listSymbolsInputSchema>, PlcListSymbolsToolOutput>
+  | ToolDefinition<
+      z.infer<typeof describeSymbolInputSchema>,
+      PlcDescribeSymbolToolOutput
+    >
   | ToolDefinition<z.infer<typeof readInputSchema>, PlcReadToolOutput>
   | ToolDefinition<z.infer<typeof readManyInputSchema>, PlcReadManyToolOutput>
+  | ToolDefinition<z.infer<typeof readGroupInputSchema>, PlcReadGroupToolOutput>
+  | ToolDefinition<z.infer<typeof stateInputSchema>, PlcListGroupsToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcStateToolOutput>
   | ToolDefinition<z.infer<typeof writeInputSchema>, PlcWriteToolOutput>
   | ToolDefinition<
@@ -238,6 +337,7 @@ export function createToolDefinitions(): Array<
       z.infer<typeof listWatchesInputSchema>,
       PlcListWatchesToolOutput
     >
+  | ToolDefinition<z.infer<typeof waitUntilInputSchema>, PlcWaitUntilToolOutput>
 > {
   return [
     createToolDefinition({
@@ -253,6 +353,15 @@ export function createToolDefinitions(): Array<
           count: symbols.length,
         };
       },
+    }),
+    createToolDefinition({
+      name: "plc_describe_symbol",
+      description:
+        "Describe a PLC symbol including type, size, metadata, arrays and struct members when available.",
+      inputSchema: describeSymbolInputSchema,
+      handler: async (input, context) => ({
+        symbol: await context.runtime.describeSymbol(input),
+      }),
     }),
     createToolDefinition({
       name: "plc_set_write_mode",
@@ -281,6 +390,26 @@ export function createToolDefinitions(): Array<
           count: results.length,
         };
       },
+    }),
+    createToolDefinition({
+      name: "plc_list_groups",
+      description: "List configured PLC symbol groups.",
+      inputSchema: stateInputSchema,
+      handler: async (_input, context) => {
+        const groups = context.runtime.listGroups();
+        return {
+          groups,
+          count: groups.length,
+        };
+      },
+    }),
+    createToolDefinition({
+      name: "plc_read_group",
+      description: "Read all symbols from a configured PLC symbol group.",
+      inputSchema: readGroupInputSchema,
+      handler: async (input, context) => ({
+        group: await context.runtime.readGroup(input),
+      }),
     }),
     createToolDefinition({
       name: "plc_watch",
@@ -362,6 +491,30 @@ export function createToolDefinitions(): Array<
       },
     }),
     createToolDefinition({
+      name: "plc_wait_until",
+      description:
+        "Wait for PLC symbol conditions to become true, optionally requiring a stable duration.",
+      inputSchema: waitUntilInputSchema,
+      handler: async (input, context) => {
+        const waitInput = {
+          condition: input.condition,
+          timeoutMs: input.timeoutMs,
+          ...(context.signal === undefined ? {} : { signal: context.signal }),
+          ...(input.stableForMs === undefined
+            ? {}
+            : { stableForMs: input.stableForMs }),
+          ...(input.cycleTimeMs === undefined
+            ? {}
+            : { cycleTimeMs: input.cycleTimeMs }),
+          ...(input.maxDelayMs === undefined
+            ? {}
+            : { maxDelayMs: input.maxDelayMs }),
+        };
+
+        return context.runtime.waitUntil(waitInput);
+      },
+    }),
+    createToolDefinition({
       name: "plc_write",
       description:
         "Write a PLC symbol when config and runtime write gates permit it.",
@@ -386,13 +539,16 @@ export function createToolDefinitions(): Array<
 
 export {
   listSymbolsInputSchema,
+  describeSymbolInputSchema,
   readInputSchema,
   readManyInputSchema,
+  readGroupInputSchema,
   stateInputSchema,
   writeInputSchema,
   setWriteModeInputSchema,
   watchInputSchema,
   unwatchInputSchema,
   listWatchesInputSchema,
+  waitUntilInputSchema,
   WriteDeniedError,
 };

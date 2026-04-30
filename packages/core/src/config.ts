@@ -2,10 +2,13 @@ import { z } from "zod";
 
 export const LOOPBACK_AMS_NET_ID = "127.0.0.1.1.1" as const;
 export const DEFAULT_PLC_ADS_PORT = 851 as const;
+export const DEFAULT_NC_ADS_PORT = 500 as const;
+export const DEFAULT_IO_ADS_PORT = 300 as const;
 export const DEFAULT_ROUTER_TCP_PORT = 48_898 as const;
 export const DEFAULT_LOCAL_ADS_PORT = 32_000 as const;
 export const DEFAULT_NOTIFICATION_CYCLE_TIME_MS = 250 as const;
 export const DEFAULT_MAX_NOTIFICATIONS = 128 as const;
+export const DEFAULT_MAX_WAIT_UNTIL_MS = 120_000 as const;
 
 const amsNetIdSegmentSchema = z.coerce
   .number()
@@ -57,6 +60,35 @@ const symbolPathSchema = z
   .min(1, "Allowlist entries must not be empty.")
   .transform((value) => value.trim());
 
+const plcSymbolGroupsSchema = z
+  .record(
+    z
+      .array(symbolPathSchema)
+      .min(1, "PLC symbol groups must contain at least one symbol."),
+  )
+  .default({});
+
+const adsServiceConfigSchema = z
+  .object({
+    targetAdsPort: adsPortSchema.optional(),
+  })
+  .strict();
+
+const plcAdsServiceConfigSchema = adsServiceConfigSchema
+  .extend({
+    symbolGroups: plcSymbolGroupsSchema,
+  })
+  .strict();
+
+const adsServicesConfigSchema = z
+  .object({
+    plc: plcAdsServiceConfigSchema.optional(),
+    nc: adsServiceConfigSchema.optional(),
+    io: adsServiceConfigSchema.optional(),
+  })
+  .strict()
+  .default({});
+
 const commonConfigSchema = z.object({
   targetAmsNetId: amsNetIdSchema,
   targetAdsPort: adsPortSchema.default(DEFAULT_PLC_ADS_PORT),
@@ -75,6 +107,13 @@ const commonConfigSchema = z.object({
     .min(1, "At least one notification slot must be available.")
     .max(550, "Max notifications should stay within Beckhoff ADS limits.")
     .default(DEFAULT_MAX_NOTIFICATIONS),
+  maxWaitUntilMs: z
+    .number()
+    .int()
+    .min(1_000, "Max wait-until timeout must be at least 1000 ms.")
+    .max(3_600_000, "Max wait-until timeout must be 3600000 ms or lower.")
+    .default(DEFAULT_MAX_WAIT_UNTIL_MS),
+  services: adsServicesConfigSchema,
 });
 
 export const adsRouterConnectionConfigSchema = commonConfigSchema.extend({
@@ -109,6 +148,19 @@ export const twinCatAdsConfigSchema = z
     }
   });
 
+export type TwinCatAdsServiceName = "plc" | "nc" | "io";
+export interface AdsNamedServiceConfig {
+  readonly targetAdsPort: number;
+}
+export interface PlcAdsNamedServiceConfig extends AdsNamedServiceConfig {
+  readonly symbolGroups: Record<string, string[]>;
+}
+export interface TwinCatAdsServiceConfigs {
+  readonly plc: PlcAdsNamedServiceConfig;
+  readonly nc: AdsNamedServiceConfig;
+  readonly io: AdsNamedServiceConfig;
+}
+
 export type AdsConnectionMode = z.infer<
   typeof twinCatAdsConfigSchema
 >["connectionMode"];
@@ -118,7 +170,14 @@ export type AdsRouterConnectionConfig = z.infer<
 export type AdsDirectConnectionConfig = z.infer<
   typeof adsDirectConnectionConfigSchema
 >;
-export type TwinCatAdsRuntimeConfig = z.infer<typeof twinCatAdsConfigSchema>;
+type ParsedTwinCatAdsRuntimeConfig = z.infer<typeof twinCatAdsConfigSchema>;
+export type TwinCatAdsRuntimeConfig = Omit<
+  ParsedTwinCatAdsRuntimeConfig,
+  "services" | "targetAdsPort"
+> & {
+  readonly targetAdsPort: number;
+  readonly services: TwinCatAdsServiceConfigs;
+};
 export type TwinCatAdsRouterConfigInput = Omit<
   z.input<typeof adsRouterConnectionConfigSchema>,
   "connectionMode"
@@ -135,6 +194,28 @@ export type WritePolicy = Pick<
   "readOnly" | "writeAllowlist"
 >;
 
+function normalizeServiceConfigs(
+  config: ParsedTwinCatAdsRuntimeConfig,
+): TwinCatAdsServiceConfigs {
+  const plcTargetAdsPort =
+    config.services.plc?.targetAdsPort ?? config.targetAdsPort;
+
+  return {
+    plc: {
+      targetAdsPort: plcTargetAdsPort,
+      symbolGroups: config.services.plc?.symbolGroups ?? {},
+    },
+    nc: {
+      targetAdsPort:
+        config.services.nc?.targetAdsPort ?? DEFAULT_NC_ADS_PORT,
+    },
+    io: {
+      targetAdsPort:
+        config.services.io?.targetAdsPort ?? DEFAULT_IO_ADS_PORT,
+    },
+  };
+}
+
 export function normalizeTwinCatAdsConfig(
   input: TwinCatAdsConfigInput,
 ): TwinCatAdsRuntimeConfig {
@@ -146,7 +227,14 @@ export function normalizeTwinCatAdsConfig(
       ? { ...input, connectionMode: "router" }
       : input;
 
-  return twinCatAdsConfigSchema.parse(normalizedInput);
+  const parsed = twinCatAdsConfigSchema.parse(normalizedInput);
+  const services = normalizeServiceConfigs(parsed);
+
+  return {
+    ...parsed,
+    targetAdsPort: services.plc.targetAdsPort,
+    services,
+  };
 }
 
 export function normalizeExtensionConfig(

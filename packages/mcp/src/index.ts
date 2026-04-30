@@ -43,12 +43,18 @@ const readInputSchema = z
     name: symbolNameSchema,
   })
   .strict();
+const describeSymbolInputSchema = readInputSchema;
 const readManyInputSchema = z
   .object({
     names: z
       .array(symbolNameSchema)
       .min(1, "At least one PLC symbol is required.")
       .max(100, "At most 100 PLC symbols can be read at once."),
+  })
+  .strict();
+const readGroupInputSchema = z
+  .object({
+    group: z.string().trim().min(1, "PLC symbol group must not be empty."),
   })
   .strict();
 const writeInputSchema = z
@@ -79,6 +85,75 @@ const unwatchInputSchema = readInputSchema;
 const setWriteModeInputSchema = z
   .object({
     mode: z.enum(["read-only", "enabled"]),
+  })
+  .strict();
+const waitComparisonOperatorSchema = z.enum([
+  "equals",
+  "notEquals",
+  "greaterThan",
+  "greaterThanOrEquals",
+  "lessThan",
+  "lessThanOrEquals",
+]);
+type WaitConditionInput =
+  | {
+      readonly name: string;
+      readonly operator: z.infer<typeof waitComparisonOperatorSchema>;
+      readonly value?: unknown;
+    }
+  | { readonly allOf: readonly WaitConditionInput[] }
+  | { readonly anyOf: readonly WaitConditionInput[] };
+const waitConditionSchema: z.ZodType<WaitConditionInput> = z.lazy(() =>
+  z.union([
+    z
+      .object({
+        name: symbolNameSchema,
+        operator: waitComparisonOperatorSchema,
+        value: z.unknown(),
+      })
+      .strict(),
+    z
+      .object({
+        allOf: z
+          .array(waitConditionSchema)
+          .min(1, "allOf must contain at least one condition."),
+      })
+      .strict(),
+    z
+      .object({
+        anyOf: z
+          .array(waitConditionSchema)
+          .min(1, "anyOf must contain at least one condition."),
+      })
+      .strict(),
+  ]),
+);
+const waitUntilInputSchema = z
+  .object({
+    condition: waitConditionSchema,
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1, "Wait timeout must be at least 1 ms.")
+      .max(3_600_000, "Wait timeout must be 3600000 ms or lower."),
+    stableForMs: z
+      .number()
+      .int()
+      .min(0, "Stable duration must be 0 ms or higher.")
+      .max(3_600_000, "Stable duration must be 3600000 ms or lower.")
+      .optional(),
+    cycleTimeMs: z
+      .number()
+      .int()
+      .min(10, "Watch cycle time must be at least 10 ms.")
+      .max(60_000, "Watch cycle time must be 60000 ms or lower.")
+      .optional(),
+    maxDelayMs: z
+      .number()
+      .int()
+      .min(0, "Watch max delay must be 0 ms or higher.")
+      .max(60_000, "Watch max delay must be 60000 ms or lower.")
+      .optional(),
   })
   .strict();
 
@@ -223,6 +298,17 @@ export function createMcpToolDefinitions(
       },
     },
     {
+      name: "plc_describe_symbol",
+      title: "PLC Describe Symbol",
+      description:
+        "Describe a PLC symbol including type, size, metadata, arrays and struct members when available.",
+      inputSchema: describeSymbolInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof describeSymbolInputSchema>) => ({
+        symbol: await runtime.describeSymbol(input),
+      }),
+    },
+    {
       name: "plc_read",
       title: "PLC Read",
       description: "Read a PLC symbol by name.",
@@ -245,6 +331,30 @@ export function createMcpToolDefinitions(
           count: results.length,
         };
       },
+    },
+    {
+      name: "plc_list_groups",
+      title: "PLC List Groups",
+      description: "List configured PLC symbol groups.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: () => {
+        const groups = runtime.listGroups();
+        return {
+          groups,
+          count: groups.length,
+        };
+      },
+    },
+    {
+      name: "plc_read_group",
+      title: "PLC Read Group",
+      description: "Read all symbols from a configured PLC symbol group.",
+      inputSchema: readGroupInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof readGroupInputSchema>) => ({
+        group: await runtime.readGroup(input),
+      }),
     },
     {
       name: "plc_write",
@@ -286,6 +396,31 @@ export function createMcpToolDefinitions(
         return {
           watch: await runtime.watchSymbol(watchInput),
         };
+      },
+    },
+    {
+      name: "plc_wait_until",
+      title: "PLC Wait Until",
+      description:
+        "Wait for PLC symbol conditions to become true, optionally requiring a stable duration.",
+      inputSchema: waitUntilInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof waitUntilInputSchema>) => {
+        const waitInput = {
+          condition: input.condition,
+          timeoutMs: input.timeoutMs,
+          ...(input.stableForMs === undefined
+            ? {}
+            : { stableForMs: input.stableForMs }),
+          ...(input.cycleTimeMs === undefined
+            ? {}
+            : { cycleTimeMs: input.cycleTimeMs }),
+          ...(input.maxDelayMs === undefined
+            ? {}
+            : { maxDelayMs: input.maxDelayMs }),
+        };
+
+        return runtime.waitUntil(waitInput);
       },
     },
     {
@@ -492,6 +627,7 @@ export async function loadConfigInput(
         env.TWINCAT_ADS_NOTIFICATION_CYCLE_TIME_MS,
       ),
       maxNotifications: parseOptionalNumber(env.TWINCAT_ADS_MAX_NOTIFICATIONS),
+      maxWaitUntilMs: parseOptionalNumber(env.TWINCAT_ADS_MAX_WAIT_UNTIL_MS),
       routerAddress: env.TWINCAT_ADS_ROUTER_ADDRESS,
       routerTcpPort: parseOptionalNumber(env.TWINCAT_ADS_ROUTER_TCP_PORT),
       localAmsNetId: env.TWINCAT_ADS_LOCAL_AMS_NET_ID,

@@ -16,6 +16,15 @@ function createRuntimeStub() {
         indexOffset: 2,
       },
     ],
+    describeSymbol: async ({ name }: { name: string }) => ({
+      name,
+      type: "INT",
+      size: 2,
+      comment: "",
+      flags: 0,
+      indexGroup: 1,
+      indexOffset: 2,
+    }),
     readSymbol: async ({ name }: { name: string }) => ({
       name,
       value: 1,
@@ -31,6 +40,27 @@ function createRuntimeStub() {
         timestamp: "2026-01-01T00:00:00.000Z",
         symbol: { name, type: "INT" },
       })),
+    listGroups: () => [
+      {
+        name: "status",
+        symbols: ["MAIN.value"],
+        count: 1,
+      },
+    ],
+    readGroup: async ({ group }: { group: string }) => ({
+      group,
+      symbols: ["MAIN.value"],
+      results: [
+        {
+          name: "MAIN.value",
+          value: 1,
+          type: "INT",
+          timestamp: "2026-01-01T00:00:00.000Z",
+          symbol: { name: "MAIN.value", type: "INT" },
+        },
+      ],
+      count: 1,
+    }),
     readState: async () => ({
       connection: { connected: true },
       adsState: "connected" as const,
@@ -87,6 +117,16 @@ function createRuntimeStub() {
       active: false,
     }),
     listWatches: () => [],
+    waitUntil: async ({ timeoutMs }: { timeoutMs: number }) => ({
+      status: "fulfilled" as const,
+      conditionMatched: true,
+      startedAt: "2026-01-01T00:00:00.000Z",
+      completedAt: "2026-01-01T00:00:00.010Z",
+      durationMs: 10,
+      timeoutMs,
+      stableForMs: 0,
+      values: [],
+    }),
   };
 }
 
@@ -147,5 +187,58 @@ describe("tools", () => {
       expect("unsubscribe" in result.data.watch).toBe(false);
       expect(result.data.watch.notificationHandle).toBe(123);
     }
+  });
+
+  it("returns configured PLC groups", async () => {
+    const tools = createToolDefinitions();
+    const tool = tools.find((entry) => entry.name === "plc_list_groups");
+    expect(tool).toBeDefined();
+
+    const result = await tool!.execute({}, { runtime: createRuntimeStub() as never });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.count).toBe(1);
+      expect(result.data.groups[0]?.name).toBe("status");
+    }
+  });
+
+  it("passes AbortSignal through plc_wait_until", async () => {
+    const tools = createToolDefinitions();
+    const tool = tools.find((entry) => entry.name === "plc_wait_until");
+    expect(tool).toBeDefined();
+
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const runtime = {
+      ...createRuntimeStub(),
+      waitUntil: async ({ signal }: { signal?: AbortSignal }) => {
+        receivedSignal = signal;
+        return {
+          status: "cancelled" as const,
+          conditionMatched: false,
+          startedAt: "2026-01-01T00:00:00.000Z",
+          completedAt: "2026-01-01T00:00:00.001Z",
+          durationMs: 1,
+          timeoutMs: 100,
+          stableForMs: 0,
+          values: [],
+        };
+      },
+    };
+
+    const result = await tool!.execute(
+      {
+        condition: { name: "MAIN.watch", operator: "equals", value: true },
+        timeoutMs: 100,
+      },
+      {
+        runtime: runtime as never,
+        signal: controller.signal,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(receivedSignal).toBe(controller.signal);
   });
 });

@@ -65,4 +65,28 @@ describe("pi config", () => {
 
     expect(writtenFile.targetAmsNetId).toBe("192.168.10.20.1.1");
   });
+
+  it("updates both top-level and service PLC ports", async () => {
+    const cwd = await createTempDir();
+    const resolved = await resolvePiConfig({ cwd });
+
+    const updated = await persistTargetConfigUpdate({
+      configPath: resolved.configPath!,
+      targetAmsNetId: "192.168.10.20.1.1",
+      targetAdsPort: 852,
+    });
+
+    expect(updated.targetAdsPort).toBe(852);
+    expect(updated.services.plc.targetAdsPort).toBe(852);
+
+    const writtenFile = JSON.parse(
+      await readFile(resolved.configPath!, "utf8"),
+    ) as {
+      targetAdsPort: number;
+      services: { plc: { targetAdsPort: number } };
+    };
+
+    expect(writtenFile.targetAdsPort).toBe(852);
+    expect(writtenFile.services.plc.targetAdsPort).toBe(852);
+  });
 });

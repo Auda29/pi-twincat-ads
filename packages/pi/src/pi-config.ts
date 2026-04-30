@@ -44,6 +44,19 @@ export function createDefaultPiConfig(): ExtensionConfigInput {
     contextSnapshotSymbols: [],
     notificationCycleTimeMs: 250,
     maxNotifications: 128,
+    maxWaitUntilMs: 120_000,
+    services: {
+      plc: {
+        targetAdsPort: 851,
+        symbolGroups: {},
+      },
+      nc: {
+        targetAdsPort: 500,
+      },
+      io: {
+        targetAdsPort: 300,
+      },
+    },
   };
 }
 
@@ -142,6 +155,13 @@ export async function persistTargetConfigUpdate(
 
   if (options.targetAdsPort !== undefined) {
     nextConfig.targetAdsPort = options.targetAdsPort;
+    nextConfig.services = {
+      ...currentConfig.services,
+      plc: {
+        ...currentConfig.services?.plc,
+        targetAdsPort: options.targetAdsPort,
+      },
+    };
   }
 
   const normalizedConfig = normalizeExtensionConfig(nextConfig);

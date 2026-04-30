@@ -142,7 +142,7 @@ Release order:
 
 1. `twincat-mcp-core`
 2. `pi-twincat-ads@next`
-3. `twincat-mcp@0.1.0`
+3. `twincat-mcp`
 
 See `docs/release-flow.md` for publish checks, version policy, and the Pi npm
 publish workflow.

@@ -18,8 +18,12 @@ import {
 } from "ads-client";
 
 import {
+  DEFAULT_IO_ADS_PORT,
+  DEFAULT_MAX_WAIT_UNTIL_MS,
+  DEFAULT_NC_ADS_PORT,
   isWriteAllowed,
   type ExtensionRuntimeConfig,
+  type TwinCatAdsServiceName,
 } from "./config.js";
 
 export interface AdsServiceDependencies {
@@ -38,6 +42,13 @@ export type AdsConnectionInfo = AdsClientConnection;
 export type AdsStateSnapshot = AdsState;
 export type AdsDeviceInfo = AdsClientDeviceInfo;
 
+export interface AdsNamedServiceConnectionSummary {
+  readonly name: TwinCatAdsServiceName;
+  readonly targetAdsPort: number;
+  readonly connected: boolean;
+  readonly state: AdsConnectionState;
+}
+
 export interface PlcSymbolSummary {
   readonly name: string;
   readonly type: string;
@@ -46,6 +57,29 @@ export interface PlcSymbolSummary {
   readonly flags: number;
   readonly indexGroup: number;
   readonly indexOffset: number;
+}
+
+export interface PlcDataTypeMemberDescription {
+  readonly name: string;
+  readonly type: string;
+  readonly size: number;
+  readonly offset: number;
+  readonly comment: string;
+  readonly arrayDimension: number;
+  readonly arrayInfos: AdsDataType["arrayInfos"];
+  readonly attributes: AdsDataType["attributes"];
+  readonly subItems?: PlcDataTypeMemberDescription[];
+}
+
+export interface PlcSymbolDescription extends PlcSymbolSummary {
+  readonly adsDataType?: number;
+  readonly adsDataTypeStr?: string;
+  readonly flagsStr?: string[];
+  readonly arrayDimension?: number;
+  readonly arrayInfo?: AdsSymbol["arrayInfo"];
+  readonly attributes?: AdsSymbol["attributes"];
+  readonly typeGuid?: string;
+  readonly dataType?: PlcDataTypeMemberDescription;
 }
 
 export interface PlcReadResult<T = unknown> {
@@ -106,6 +140,74 @@ export interface PlcWriteAccessResult {
   readonly reason?: string;
 }
 
+export interface PlcSymbolGroupSummary {
+  readonly name: string;
+  readonly symbols: string[];
+  readonly count: number;
+}
+
+export interface PlcReadGroupResult {
+  readonly group: string;
+  readonly symbols: string[];
+  readonly results: PlcReadResult[];
+  readonly count: number;
+}
+
+export type PlcWaitComparisonOperator =
+  | "equals"
+  | "notEquals"
+  | "greaterThan"
+  | "greaterThanOrEquals"
+  | "lessThan"
+  | "lessThanOrEquals";
+
+export interface PlcWaitComparisonCondition {
+  readonly name: string;
+  readonly operator: PlcWaitComparisonOperator;
+  readonly value?: unknown;
+}
+
+export interface PlcWaitAllOfCondition {
+  readonly allOf: readonly PlcWaitCondition[];
+}
+
+export interface PlcWaitAnyOfCondition {
+  readonly anyOf: readonly PlcWaitCondition[];
+}
+
+export type PlcWaitCondition =
+  | PlcWaitComparisonCondition
+  | PlcWaitAllOfCondition
+  | PlcWaitAnyOfCondition;
+
+export interface PlcWaitUntilInput {
+  readonly condition: PlcWaitCondition;
+  readonly timeoutMs: number;
+  readonly stableForMs?: number;
+  readonly cycleTimeMs?: number;
+  readonly maxDelayMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export type PlcWaitUntilStatus = "fulfilled" | "timeout" | "cancelled";
+
+export interface PlcWaitValueSnapshot {
+  readonly name: string;
+  readonly value: unknown;
+  readonly timestamp: string;
+}
+
+export interface PlcWaitUntilResult {
+  readonly status: PlcWaitUntilStatus;
+  readonly conditionMatched: boolean;
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly durationMs: number;
+  readonly timeoutMs: number;
+  readonly stableForMs: number;
+  readonly values: PlcWaitValueSnapshot[];
+}
+
 export class WriteDeniedError extends Error {
   readonly code = "WRITE_DENIED" as const;
 }
@@ -116,21 +218,124 @@ export interface WatchSymbolOptions {
   readonly maxDelayMs?: number;
 }
 
+function collectConditionSymbols(
+  condition: PlcWaitCondition,
+  symbols = new Set<string>(),
+): Set<string> {
+  if ("name" in condition) {
+    symbols.add(condition.name.trim());
+    return symbols;
+  }
+
+  if ("allOf" in condition) {
+    for (const child of condition.allOf) {
+      collectConditionSymbols(child, symbols);
+    }
+    return symbols;
+  }
+
+  for (const child of condition.anyOf) {
+    collectConditionSymbols(child, symbols);
+  }
+
+  return symbols;
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  ) {
+    return false;
+  }
+
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
+function compareNumbers(
+  left: unknown,
+  right: unknown,
+  operator: Exclude<PlcWaitComparisonOperator, "equals" | "notEquals">,
+): boolean {
+  const leftNumber = typeof left === "number" ? left : Number(left);
+  const rightNumber = typeof right === "number" ? right : Number(right);
+
+  if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+    return false;
+  }
+
+  switch (operator) {
+    case "greaterThan":
+      return leftNumber > rightNumber;
+    case "greaterThanOrEquals":
+      return leftNumber >= rightNumber;
+    case "lessThan":
+      return leftNumber < rightNumber;
+    case "lessThanOrEquals":
+      return leftNumber <= rightNumber;
+  }
+}
+
+function evaluateCondition(
+  condition: PlcWaitCondition,
+  values: ReadonlyMap<string, PlcWaitValueSnapshot>,
+): boolean {
+  if ("allOf" in condition) {
+    return condition.allOf.every((child) => evaluateCondition(child, values));
+  }
+
+  if ("anyOf" in condition) {
+    return condition.anyOf.some((child) => evaluateCondition(child, values));
+  }
+
+  const snapshot = values.get(condition.name.trim());
+  if (snapshot === undefined) {
+    return false;
+  }
+
+  switch (condition.operator) {
+    case "equals":
+      return valuesEqual(snapshot.value, condition.value);
+    case "notEquals":
+      return !valuesEqual(snapshot.value, condition.value);
+    default:
+      return compareNumbers(snapshot.value, condition.value, condition.operator);
+  }
+}
+
 export interface TwinCatAdsService {
   readonly state: AdsConnectionState;
   readonly writeMode: PlcWriteMode;
   readonly lastError: Error | undefined;
   readonly hasActiveConnection: boolean;
 
+  listServices(): AdsNamedServiceConnectionSummary[];
+  getServiceClient(name: TwinCatAdsServiceName): Client;
+  connectService(name: TwinCatAdsServiceName): Promise<AdsClientConnection>;
+  disconnectService(name: TwinCatAdsServiceName): Promise<void>;
   connect(): Promise<AdsClientConnection>;
   disconnect(): Promise<void>;
   listSymbols(filter?: string): Promise<PlcSymbolSummary[]>;
+  describeSymbol(name: string): Promise<PlcSymbolDescription>;
   readSymbol<T = unknown>(name: string): Promise<PlcReadResult<T>>;
   readMany(names: readonly string[]): Promise<PlcReadResult[]>;
+  listGroups(): PlcSymbolGroupSummary[];
+  readGroup(group: string): Promise<PlcReadGroupResult>;
   writeSymbol<T = unknown>(
     name: string,
     value: T,
   ): Promise<PlcWriteResult<T>>;
+  waitUntil(input: PlcWaitUntilInput): Promise<PlcWaitUntilResult>;
   watchSymbol(
     name: string,
     options?: WatchSymbolOptions,
@@ -153,26 +358,95 @@ interface PlcWatchEntry {
   lastTimestamp?: string;
 }
 
+type AdsServiceRuntimeConfigInput = Omit<
+  ExtensionRuntimeConfig,
+  "maxWaitUntilMs" | "services"
+> & {
+  readonly maxWaitUntilMs?: number;
+  readonly services?: Partial<ExtensionRuntimeConfig["services"]>;
+};
+
+function completeRuntimeConfig(
+  config: AdsServiceRuntimeConfigInput,
+): ExtensionRuntimeConfig {
+  const plcTargetAdsPort =
+    config.services?.plc?.targetAdsPort ?? config.targetAdsPort;
+
+  return {
+    ...config,
+    targetAdsPort: plcTargetAdsPort,
+    maxWaitUntilMs: config.maxWaitUntilMs ?? DEFAULT_MAX_WAIT_UNTIL_MS,
+    services: {
+      plc: {
+        targetAdsPort: plcTargetAdsPort,
+        symbolGroups: config.services?.plc?.symbolGroups ?? {},
+      },
+      nc: {
+        targetAdsPort:
+          config.services?.nc?.targetAdsPort ?? DEFAULT_NC_ADS_PORT,
+      },
+      io: {
+        targetAdsPort:
+          config.services?.io?.targetAdsPort ?? DEFAULT_IO_ADS_PORT,
+      },
+    },
+  };
+}
+
 function toAdsClientSettings(
   config: ExtensionRuntimeConfig,
+  targetAdsPort = config.targetAdsPort,
 ): AdsClientSettings {
   if (config.connectionMode === "direct") {
-    return {
+    const settings: AdsClientSettings = {
       targetAmsNetId: config.targetAmsNetId,
-      targetAdsPort: config.targetAdsPort,
-      routerAddress: config.routerAddress,
-      routerTcpPort: config.routerTcpPort,
-      localAmsNetId: config.localAmsNetId,
-      localAdsPort: config.localAdsPort,
+      targetAdsPort,
       autoReconnect: true,
     };
+
+    if (config.routerAddress !== undefined) {
+      settings.routerAddress = config.routerAddress;
+    }
+
+    if (config.routerTcpPort !== undefined) {
+      settings.routerTcpPort = config.routerTcpPort;
+    }
+
+    if (config.localAmsNetId !== undefined) {
+      settings.localAmsNetId = config.localAmsNetId;
+    }
+
+    if (config.localAdsPort !== undefined) {
+      settings.localAdsPort = config.localAdsPort;
+    }
+
+    return settings;
   }
 
   return {
     targetAmsNetId: config.targetAmsNetId,
-    targetAdsPort: config.targetAdsPort,
+    targetAdsPort,
     autoReconnect: true,
   };
+}
+
+function createServiceClients(
+  config: ExtensionRuntimeConfig,
+): Map<TwinCatAdsServiceName, Client> {
+  return new Map<TwinCatAdsServiceName, Client>([
+    [
+      "plc",
+      new Client(toAdsClientSettings(config, config.services.plc.targetAdsPort)),
+    ],
+    [
+      "nc",
+      new Client(toAdsClientSettings(config, config.services.nc.targetAdsPort)),
+    ],
+    [
+      "io",
+      new Client(toAdsClientSettings(config, config.services.io.targetAdsPort)),
+    ],
+  ]);
 }
 
 function toSymbolSummary(name: string, symbol: AdsSymbol): PlcSymbolSummary {
@@ -185,6 +459,100 @@ function toSymbolSummary(name: string, symbol: AdsSymbol): PlcSymbolSummary {
     indexGroup: symbol.indexGroup,
     indexOffset: symbol.indexOffset,
   };
+}
+
+function toDataTypeDescription(
+  dataType: AdsDataType,
+  depth = 0,
+): PlcDataTypeMemberDescription {
+  const description: {
+    name: string;
+    type: string;
+    size: number;
+    offset: number;
+    comment: string;
+    arrayDimension: number;
+    arrayInfos: AdsDataType["arrayInfos"];
+    attributes: AdsDataType["attributes"];
+    subItems?: PlcDataTypeMemberDescription[];
+  } = {
+    name: dataType.name,
+    type: dataType.type,
+    size: dataType.size,
+    offset: dataType.offset,
+    comment: dataType.comment ?? "",
+    arrayDimension: dataType.arrayDimension,
+    arrayInfos: dataType.arrayInfos,
+    attributes: dataType.attributes,
+  };
+
+  if (depth < 2 && dataType.subItems.length > 0) {
+    description.subItems = dataType.subItems.map((subItem) =>
+      toDataTypeDescription(subItem, depth + 1),
+    );
+  }
+
+  return description;
+}
+
+function toSymbolDescription(
+  name: string,
+  symbol: AdsSymbol,
+  dataType?: AdsDataType,
+): PlcSymbolDescription {
+  const description: {
+    name: string;
+    type: string;
+    size: number;
+    comment: string;
+    flags: number;
+    indexGroup: number;
+    indexOffset: number;
+    adsDataType?: number;
+    adsDataTypeStr?: string;
+    flagsStr?: string[];
+    arrayDimension?: number;
+    arrayInfo?: AdsSymbol["arrayInfo"];
+    attributes?: AdsSymbol["attributes"];
+    typeGuid?: string;
+    dataType?: PlcDataTypeMemberDescription;
+  } = {
+    ...toSymbolSummary(name, symbol),
+  };
+
+  if (symbol.adsDataType !== undefined) {
+    description.adsDataType = symbol.adsDataType;
+  }
+
+  if (symbol.adsDataTypeStr !== undefined) {
+    description.adsDataTypeStr = symbol.adsDataTypeStr;
+  }
+
+  if (symbol.flagsStr !== undefined) {
+    description.flagsStr = symbol.flagsStr;
+  }
+
+  if (symbol.arrayDimension !== undefined) {
+    description.arrayDimension = symbol.arrayDimension;
+  }
+
+  if (symbol.arrayInfo !== undefined) {
+    description.arrayInfo = symbol.arrayInfo;
+  }
+
+  if (symbol.attributes !== undefined) {
+    description.attributes = symbol.attributes;
+  }
+
+  if (symbol.typeGuid !== undefined) {
+    description.typeGuid = symbol.typeGuid;
+  }
+
+  if (dataType !== undefined) {
+    description.dataType = toDataTypeDescription(dataType);
+  }
+
+  return description;
 }
 
 function toReadResult<T>(result: ReadValueResult<T>): PlcReadResult<T> {
@@ -206,6 +574,7 @@ function toRawReadCommand(symbol: AdsSymbol): ReadRawMultiCommand {
 }
 
 export class AdsService {
+  readonly #serviceClients: Map<TwinCatAdsServiceName, Client>;
   readonly #client: Client;
   readonly #symbolCache = new Map<string, AdsSymbol>();
   readonly #symbolLookupCache = new Map<string, AdsSymbol>();
@@ -217,12 +586,15 @@ export class AdsService {
   #connectPromise: Promise<AdsClientConnection> | undefined;
   #symbolsLoaded = false;
   #writeMode: PlcWriteMode = "read-only";
+  private readonly config: ExtensionRuntimeConfig;
 
   constructor(
-    private readonly config: ExtensionRuntimeConfig,
+    config: AdsServiceRuntimeConfigInput,
     private readonly dependencies: AdsServiceDependencies = {},
   ) {
-    this.#client = new Client(toAdsClientSettings(config));
+    this.config = completeRuntimeConfig(config);
+    this.#serviceClients = createServiceClients(this.config);
+    this.#client = this.#getExistingServiceClient("plc");
     this.#bindClientEvents();
   }
 
@@ -244,6 +616,49 @@ export class AdsService {
 
   get writeMode(): PlcWriteMode {
     return this.#writeMode;
+  }
+
+  listServices(): AdsNamedServiceConnectionSummary[] {
+    return (["plc", "nc", "io"] as const).map((name) => {
+      const client = this.#getExistingServiceClient(name);
+      return {
+        name,
+        targetAdsPort: this.config.services[name].targetAdsPort,
+        connected: client.connection.connected,
+        state: name === "plc" ? this.#state : this.#serviceState(client),
+      };
+    });
+  }
+
+  getServiceClient(name: TwinCatAdsServiceName): Client {
+    return this.#getExistingServiceClient(name);
+  }
+
+  async connectService(
+    name: TwinCatAdsServiceName,
+  ): Promise<AdsClientConnection> {
+    if (name === "plc") {
+      return this.connect();
+    }
+
+    const client = this.#getExistingServiceClient(name);
+    if (client.connection.connected) {
+      return client.connection;
+    }
+
+    return client.connect();
+  }
+
+  async disconnectService(name: TwinCatAdsServiceName): Promise<void> {
+    if (name === "plc") {
+      await this.disconnect();
+      return;
+    }
+
+    const client = this.#getExistingServiceClient(name);
+    if (client.connection.connected) {
+      await client.disconnect();
+    }
   }
 
   async connect(): Promise<AdsClientConnection> {
@@ -319,6 +734,20 @@ export class AdsService {
       }
     }
 
+    for (const [name, client] of this.#serviceClients.entries()) {
+      if (name === "plc" || !client.connection.connected) {
+        continue;
+      }
+
+      try {
+        await client.disconnect();
+      } catch (error) {
+        cleanupErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    }
+
     this.#state = "disconnected";
 
     if (cleanupErrors.length > 0) {
@@ -346,6 +775,45 @@ export class AdsService {
       })
       .map(([name, symbol]) => toSymbolSummary(name, symbol))
       .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async describeSymbol(name: string): Promise<PlcSymbolDescription> {
+    await this.connect();
+    const symbol = await this.getSymbol(name);
+
+    try {
+      const dataType = await this.#client.getDataType(symbol.type);
+      return toSymbolDescription(symbol.name, symbol, dataType);
+    } catch {
+      return toSymbolDescription(symbol.name, symbol);
+    }
+  }
+
+  listGroups(): PlcSymbolGroupSummary[] {
+    return Object.entries(this.config.services.plc.symbolGroups)
+      .map(([name, symbols]) => ({
+        name,
+        symbols: [...symbols],
+        count: symbols.length,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async readGroup(group: string): Promise<PlcReadGroupResult> {
+    const normalizedGroup = group.trim();
+    const symbols = this.config.services.plc.symbolGroups[normalizedGroup];
+
+    if (symbols === undefined) {
+      throw new Error(`PLC symbol group "${normalizedGroup}" was not found.`);
+    }
+
+    const results = await this.readMany(symbols);
+    return {
+      group: normalizedGroup,
+      symbols: [...symbols],
+      results,
+      count: results.length,
+    };
   }
 
   async readValue<T = unknown>(name: string): Promise<PlcReadResult<T>> {
@@ -555,6 +1023,239 @@ export class AdsService {
     return this.watchValue(name, undefined, options);
   }
 
+  async waitUntil(input: PlcWaitUntilInput): Promise<PlcWaitUntilResult> {
+    if (input.timeoutMs > this.config.maxWaitUntilMs) {
+      throw new Error(
+        `PLC wait timeout ${input.timeoutMs} ms exceeds configured maximum ${this.config.maxWaitUntilMs} ms.`,
+      );
+    }
+
+    const symbolNames = [...collectConditionSymbols(input.condition)];
+    if (symbolNames.length === 0) {
+      throw new Error("PLC wait condition must reference at least one symbol.");
+    }
+
+    await this.connect();
+
+    const startedAtTime = Date.now();
+    const startedAt = new Date(startedAtTime).toISOString();
+    const stableForMs = input.stableForMs ?? 0;
+    const cycleTimeMs = input.cycleTimeMs ?? this.config.notificationCycleTimeMs;
+    const values = new Map<string, PlcWaitValueSnapshot>();
+    const subscriptions: ActiveSubscription<unknown>[] = [];
+
+    return new Promise<PlcWaitUntilResult>((resolve, reject) => {
+      let settled = false;
+      let stableSince: number | undefined;
+      let stableTimer: ReturnType<typeof setTimeout> | undefined;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const timeoutTimer = setTimeout(() => {
+        finish("timeout");
+      }, input.timeoutMs);
+
+      const abortHandler = () => {
+        finish("cancelled");
+      };
+
+      const cleanup = async (): Promise<void> => {
+        clearTimeout(timeoutTimer);
+
+        if (stableTimer !== undefined) {
+          clearTimeout(stableTimer);
+        }
+
+        if (pollTimer !== undefined) {
+          clearTimeout(pollTimer);
+        }
+
+        input.signal?.removeEventListener("abort", abortHandler);
+
+        const cleanupErrors: Error[] = [];
+        for (const subscription of subscriptions) {
+          try {
+            await this.#client.unsubscribe(subscription);
+          } catch (error) {
+            cleanupErrors.push(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+        }
+
+        if (cleanupErrors.length > 0) {
+          this.#lastError = new AggregateError(
+            cleanupErrors,
+            "PLC wait subscription cleanup failed.",
+          );
+        }
+      };
+
+      const snapshotValues = (): PlcWaitValueSnapshot[] =>
+        symbolNames
+          .map((name) => values.get(name))
+          .filter((value): value is PlcWaitValueSnapshot => value !== undefined);
+
+      const finish = (status: PlcWaitUntilStatus): void => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        const completedAtTime = Date.now();
+        void cleanup();
+        resolve({
+          status,
+          conditionMatched: evaluateCondition(input.condition, values),
+          startedAt,
+          completedAt: new Date(completedAtTime).toISOString(),
+          durationMs: completedAtTime - startedAtTime,
+          timeoutMs: input.timeoutMs,
+          stableForMs,
+          values: snapshotValues(),
+        });
+      };
+
+      const evaluate = (): void => {
+        if (settled) {
+          return;
+        }
+
+        const conditionMatched = evaluateCondition(input.condition, values);
+        if (!conditionMatched) {
+          stableSince = undefined;
+          if (stableTimer !== undefined) {
+            clearTimeout(stableTimer);
+            stableTimer = undefined;
+          }
+          return;
+        }
+
+        if (stableForMs <= 0) {
+          finish("fulfilled");
+          return;
+        }
+
+        const now = Date.now();
+        stableSince ??= now;
+        const elapsedStableMs = now - stableSince;
+
+        if (elapsedStableMs >= stableForMs) {
+          finish("fulfilled");
+          return;
+        }
+
+        if (stableTimer === undefined) {
+          stableTimer = setTimeout(() => {
+            stableTimer = undefined;
+            evaluate();
+          }, stableForMs - elapsedStableMs);
+        }
+      };
+
+      const updateValue = (name: string, value: unknown, timestamp: Date): void => {
+        values.set(name, {
+          name,
+          value,
+          timestamp: timestamp.toISOString(),
+        });
+        evaluate();
+      };
+
+      const poll = async (): Promise<void> => {
+        try {
+          const results = await this.readMany(symbolNames);
+          for (const result of results) {
+            updateValue(result.name, result.value, new Date(result.timestamp));
+          }
+        } catch (error) {
+          if (!settled) {
+            settled = true;
+            void cleanup();
+            reject(error);
+          }
+          return;
+        }
+
+        if (!settled) {
+          pollTimer = setTimeout(() => {
+            void poll();
+          }, cycleTimeMs);
+        }
+      };
+
+      const subscribe = async (): Promise<void> => {
+        if (input.signal?.aborted) {
+          finish("cancelled");
+          return;
+        }
+
+        input.signal?.addEventListener("abort", abortHandler, { once: true });
+
+        try {
+          for (const name of symbolNames) {
+            if (settled) {
+              break;
+            }
+
+            const subscription = await this.#client.subscribeValue(
+              name,
+              (data) => updateValue(name, data.value, data.timestamp),
+              cycleTimeMs,
+              true,
+              input.maxDelayMs,
+            );
+
+            if (settled) {
+              await this.#client.unsubscribe(subscription);
+              break;
+            }
+
+            subscriptions.push(subscription);
+            if (subscription.latestData) {
+              updateValue(
+                name,
+                subscription.latestData.value,
+                subscription.latestData.timestamp,
+              );
+            }
+
+            if (settled) {
+              break;
+            }
+          }
+
+          const missingNames = settled
+            ? []
+            : symbolNames.filter((name) => !values.has(name));
+          if (missingNames.length > 0) {
+            const initialValues = await this.readMany(missingNames);
+            for (const result of initialValues) {
+              updateValue(result.name, result.value, new Date(result.timestamp));
+            }
+          }
+        } catch {
+          for (const subscription of subscriptions.splice(0)) {
+            try {
+              await this.#client.unsubscribe(subscription);
+            } catch {
+              // Best effort cleanup before falling back to polling.
+            }
+          }
+
+          await poll();
+        }
+      };
+
+      void subscribe().catch((error) => {
+        if (!settled) {
+          settled = true;
+          void cleanup();
+          reject(error);
+        }
+      });
+    });
+  }
+
   async unwatchValue(name: string): Promise<PlcWatchSnapshot> {
     const entry = this.#watchCache.get(name);
     if (!entry) {
@@ -663,6 +1364,19 @@ export class AdsService {
     }
 
     await this.#loadSymbolCache();
+  }
+
+  #getExistingServiceClient(name: TwinCatAdsServiceName): Client {
+    const client = this.#serviceClients.get(name);
+    if (client === undefined) {
+      throw new Error(`ADS service "${name}" is not configured.`);
+    }
+
+    return client;
+  }
+
+  #serviceState(client: Client): AdsConnectionState {
+    return client.connection.connected ? "connected" : "disconnected";
   }
 
   async #loadSymbolCache(): Promise<void> {

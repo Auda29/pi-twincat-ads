@@ -13,11 +13,20 @@ import {
 import {
   createToolDefinitions,
   type ToolDefinition,
+  type ToolExecutionResult,
   type ToolHandlerContext,
 } from "./tools/index.js";
 
+export interface RegisteredToolDefinition<TOutput = unknown>
+  extends Omit<ToolDefinition<unknown, TOutput>, "execute"> {
+  execute(
+    rawInput: unknown,
+    signal?: AbortSignal,
+  ): Promise<ToolExecutionResult<TOutput>>;
+}
+
 export interface ExtensionRegistration {
-  readonly tools: ToolDefinition<unknown, unknown>[];
+  readonly tools: RegisteredToolDefinition<unknown>[];
   readonly hooks: HookDefinition<unknown, unknown>[];
 }
 
@@ -26,7 +35,7 @@ export interface PiTwinCatAdsExtension {
   readonly config: ExtensionRuntimeConfig;
   readonly adsService: AdsService;
   readonly runtime: TwinCatAdsRuntime;
-  readonly tools: ToolDefinition<unknown, unknown>[];
+  readonly tools: RegisteredToolDefinition<unknown>[];
   readonly hooks: HookDefinition<unknown, unknown>[];
   register(): Promise<ExtensionRegistration>;
 }
@@ -35,7 +44,7 @@ class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
   readonly name = "pi-twincat-ads" as const;
   readonly adsService: AdsService;
   readonly runtime: TwinCatAdsRuntime;
-  readonly tools: ToolDefinition<unknown, unknown>[];
+  readonly tools: RegisteredToolDefinition<unknown>[];
   readonly hooks: HookDefinition<unknown, unknown>[];
 
   constructor(
@@ -53,9 +62,15 @@ class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
       config,
     };
 
-    this.tools = createToolDefinitions().map((tool) => ({
-      ...tool,
-      execute: (rawInput) => tool.execute(rawInput, toolContext),
+    this.tools = createToolDefinitions().map((tool): RegisteredToolDefinition => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema as ToolDefinition<unknown, unknown>["inputSchema"],
+      execute: (rawInput: unknown, signal?: AbortSignal) => {
+        const context =
+          signal === undefined ? toolContext : { ...toolContext, signal };
+        return tool.execute(rawInput, context);
+      },
     }));
 
     this.hooks = createHookDefinitions().map((hook) => ({
@@ -73,10 +88,13 @@ class PiTwinCatAdsExtensionImpl implements PiTwinCatAdsExtension {
 }
 
 export function createExtension(
-  config: ExtensionConfigInput,
+  config: ExtensionConfigInput | ExtensionRuntimeConfig,
   dependencies: AdsServiceDependencies = {},
 ): PiTwinCatAdsExtension {
-  const runtimeConfig = normalizeExtensionConfig(config);
+  const runtimeConfig =
+    "services" in config && "maxWaitUntilMs" in config
+      ? (config as ExtensionRuntimeConfig)
+      : normalizeExtensionConfig(config as ExtensionConfigInput);
   return new PiTwinCatAdsExtensionImpl(runtimeConfig, dependencies);
 }
 

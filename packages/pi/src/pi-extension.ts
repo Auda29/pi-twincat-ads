@@ -161,6 +161,21 @@ function formatToolSuccess(toolName: string, data: unknown): string {
     return `Listed ${result.count} PLC symbols.`;
   }
 
+  if (toolName === "plc_describe_symbol") {
+    const result = data as { symbol: { name: string; type: string; size: number } };
+    return `Symbol ${result.symbol.name}: ${result.symbol.type}, ${result.symbol.size} bytes.`;
+  }
+
+  if (toolName === "plc_list_groups") {
+    const result = data as { count: number };
+    return `Listed ${result.count} PLC symbol groups.`;
+  }
+
+  if (toolName === "plc_read_group") {
+    const result = data as { group: { group: string; count: number } };
+    return `Read PLC group ${result.group.group} with ${result.group.count} symbols.`;
+  }
+
   if (toolName === "plc_state") {
     const result = data as {
       adsState: string;
@@ -184,6 +199,11 @@ function formatToolSuccess(toolName: string, data: unknown): string {
   if (toolName === "plc_list_watches") {
     const result = data as { count: number };
     return `There are ${result.count} registered PLC watches.`;
+  }
+
+  if (toolName === "plc_wait_until") {
+    const result = data as { status: string; durationMs: number };
+    return `PLC wait completed with status ${result.status} after ${result.durationMs} ms.`;
   }
 
   if (toolName === "plc_set_write_mode") {
@@ -260,6 +280,18 @@ const toolSpecs: ToolSpec[] = [
     ),
   },
   {
+    name: "plc_describe_symbol",
+    label: "PLC Describe Symbol",
+    description:
+      "Describe a PLC symbol including type, size, metadata, arrays and struct members when available.",
+    parameters: Type.Object(
+      {
+        name: symbolNameSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
     name: "plc_set_write_mode",
     label: "PLC Write Mode",
     description:
@@ -292,6 +324,23 @@ const toolSpecs: ToolSpec[] = [
           minItems: 1,
           maxItems: 100,
         }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "plc_list_groups",
+    label: "PLC Groups",
+    description: "List configured PLC symbol groups.",
+    parameters: emptySchema,
+  },
+  {
+    name: "plc_read_group",
+    label: "PLC Read Group",
+    description: "Read all symbols from a configured PLC symbol group.",
+    parameters: Type.Object(
+      {
+        group: Type.String({ minLength: 1 }),
       },
       { additionalProperties: false },
     ),
@@ -330,6 +379,28 @@ const toolSpecs: ToolSpec[] = [
     label: "PLC Watches",
     description: "List currently registered PLC watches for this session.",
     parameters: emptySchema,
+  },
+  {
+    name: "plc_wait_until",
+    label: "PLC Wait Until",
+    description:
+      "Wait for PLC symbol conditions to become true, optionally requiring a stable duration.",
+    parameters: Type.Object(
+      {
+        condition: Type.Any(),
+        timeoutMs: Type.Integer({ minimum: 1, maximum: 3_600_000 }),
+        stableForMs: Type.Optional(
+          Type.Integer({ minimum: 0, maximum: 3_600_000 }),
+        ),
+        cycleTimeMs: Type.Optional(
+          Type.Integer({ minimum: 10, maximum: 60_000 }),
+        ),
+        maxDelayMs: Type.Optional(
+          Type.Integer({ minimum: 0, maximum: 60_000 }),
+        ),
+      },
+      { additionalProperties: false },
+    ),
   },
   {
     name: "plc_write",
@@ -452,7 +523,7 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
       label: spec.label,
       description: spec.description,
       parameters: spec.parameters,
-      async execute(toolCallId, params, _signal, _onUpdate, _ctx) {
+      async execute(toolCallId, params, signal, _onUpdate, _ctx) {
         if (spec.name === "plc_set_target") {
           const resolvedConfig = activeResolvedConfig ?? (await loadResolvedConfig());
 
@@ -497,8 +568,11 @@ export default function piTwinCatAdsExtension(pi: ExtensionAPI): void {
 
         const registration = await getRegistration();
         const internalTool = await getInternalTool(registration, spec.name);
-        const execute = internalTool.execute as (rawInput: unknown) => Promise<unknown>;
-        const result = (await execute(params)) as Awaited<
+        const execute = internalTool.execute as (
+          rawInput: unknown,
+          signal?: AbortSignal,
+        ) => Promise<unknown>;
+        const result = (await execute(params, signal)) as Awaited<
           ReturnType<RegisteredTool["execute"]>
         >;
 

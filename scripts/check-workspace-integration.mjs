@@ -27,7 +27,11 @@ function expect(condition, message) {
   }
 }
 
-for (const workspaceName of ["twincat-mcp-core", "pi-twincat-ads"]) {
+for (const workspaceName of [
+  "twincat-mcp-core",
+  "pi-twincat-ads",
+  "twincat-mcp",
+]) {
   const workspace = packages.get(workspaceName);
   expect(
     workspace?.manifest.version === rootPackage.version,
@@ -46,12 +50,6 @@ for (const consumerName of ["pi-twincat-ads", "twincat-mcp"]) {
     `${consumerName} must depend on twincat-mcp-core at version ${core?.manifest.version}.`,
   );
 }
-
-const mcpVersion = packages.get("twincat-mcp")?.manifest.version;
-expect(
-  mcpVersion === "0.1.0",
-  "twincat-mcp remains at 0.1.0 for the first MCP server release.",
-);
 
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));

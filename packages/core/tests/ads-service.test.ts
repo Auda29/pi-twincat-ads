@@ -71,6 +71,59 @@ class MockClient extends EventEmitter {
     return mockState.symbols;
   }
 
+  async getDataType(name: string) {
+    return {
+      version: 1,
+      hashValue: 1,
+      typeHashValue: 1,
+      size: name === "ST_Status" ? 4 : 2,
+      offset: 0,
+      adsDataType: 0,
+      adsDataTypeStr: "ADST_BIGTYPE",
+      flags: 0,
+      flagsStr: [],
+      arrayDimension: 0,
+      name,
+      type: "",
+      comment: `${name} type`,
+      arrayInfos: [],
+      subItems:
+        name === "ST_Status"
+          ? [
+              {
+                version: 1,
+                hashValue: 1,
+                typeHashValue: 1,
+                size: 1,
+                offset: 0,
+                adsDataType: 33,
+                adsDataTypeStr: "ADST_BIT",
+                flags: 0,
+                flagsStr: [],
+                arrayDimension: 0,
+                name: "ready",
+                type: "BOOL",
+                comment: "Ready flag",
+                arrayInfos: [],
+                subItems: [],
+                typeGuid: "",
+                rpcMethods: [],
+                attributes: [],
+                enumInfos: [],
+                extendedFlags: 0,
+                reserved: Buffer.alloc(0),
+              },
+            ]
+          : [],
+      typeGuid: "",
+      rpcMethods: [],
+      attributes: [],
+      enumInfos: [],
+      extendedFlags: 0,
+      reserved: Buffer.alloc(0),
+    };
+  }
+
   async readValue(name: string) {
     const symbol =
       mockState.symbols[name] ??
@@ -222,6 +275,12 @@ class MockClient extends EventEmitter {
   }
 }
 
+function getMockClientByPort(targetAdsPort: number): MockClient | undefined {
+  return mockState.clientInstances.find(
+    (client) => client.settings.targetAdsPort === targetAdsPort,
+  );
+}
+
 vi.mock("ads-client", () => ({
   ADS: {},
   Client: MockClient,
@@ -281,6 +340,53 @@ describe("AdsService", () => {
     await Promise.all([service.connect(), service.connect()]);
 
     expect(mockState.connectCalls).toBe(1);
+  });
+
+  it("creates a reusable ADS client registry for PLC, NC, and IO services", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        plc: {
+          targetAdsPort: 852,
+          symbolGroups: {},
+        },
+        nc: {
+          targetAdsPort: 500,
+        },
+        io: {
+          targetAdsPort: 300,
+        },
+      },
+    });
+
+    expect(mockState.clientInstances.map((client) => client.settings.targetAdsPort)).toEqual([
+      852,
+      500,
+      300,
+    ]);
+    expect(service.listServices()).toMatchObject([
+      { name: "plc", targetAdsPort: 852, connected: false },
+      { name: "nc", targetAdsPort: 500, connected: false },
+      { name: "io", targetAdsPort: 300, connected: false },
+    ]);
+
+    await service.connectService("nc");
+
+    expect(service.getServiceClient("nc").connection.connected).toBe(true);
+    expect(service.listServices()).toMatchObject([
+      { name: "plc", connected: false },
+      { name: "nc", connected: true },
+      { name: "io", connected: false },
+    ]);
   });
 
   it("enforces the runtime write gate before writing", async () => {
@@ -373,7 +479,7 @@ describe("AdsService", () => {
     });
 
     const firstWatch = await service.watchValue("MAIN.watch");
-    const client = mockState.clientInstances.at(-1);
+    const client = getMockClientByPort(851);
     expect(client).toBeDefined();
 
     client!.activeSubscriptions = {
@@ -532,5 +638,212 @@ describe("AdsService", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.name).toBe("MAIN.dynamic");
     expect(results[0]?.value).toBe(99);
+  });
+
+  it("describes a symbol with its built data type", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    mockState.symbols["MAIN.status"] = {
+      name: "MAIN.status",
+      type: "ST_Status",
+      comment: "Status struct",
+      size: 4,
+      flags: 0,
+      indexGroup: 5,
+      indexOffset: 6,
+      adsDataType: 65,
+      adsDataTypeStr: "ADST_BIGTYPE",
+      flagsStr: [],
+      arrayDimension: 0,
+      arrayInfo: [],
+      typeGuid: "",
+      attributes: [],
+    };
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+    });
+
+    const description = await service.describeSymbol("MAIN.status");
+
+    expect(description.name).toBe("MAIN.status");
+    expect(description.dataType?.name).toBe("ST_Status");
+    expect(description.dataType?.subItems?.[0]).toMatchObject({
+      name: "ready",
+      type: "BOOL",
+    });
+  });
+
+  it("lists and reads configured PLC symbol groups", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        plc: {
+          targetAdsPort: 851,
+          symbolGroups: {
+            status: ["MAIN.value", "MAIN.watch"],
+          },
+        },
+      },
+    });
+
+    expect(service.listGroups()).toEqual([
+      {
+        name: "status",
+        symbols: ["MAIN.value", "MAIN.watch"],
+        count: 2,
+      },
+    ]);
+
+    const result = await service.readGroup("status");
+    expect(result.count).toBe(2);
+    expect(result.results.map((entry) => entry.name)).toEqual([
+      "MAIN.value",
+      "MAIN.watch",
+    ]);
+  });
+
+  it("waits until a PLC condition is fulfilled by notification", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    mockState.values["MAIN.watch"] = false;
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 10,
+      maxNotifications: 128,
+    });
+
+    const waitPromise = service.waitUntil({
+      condition: {
+        name: "MAIN.watch",
+        operator: "equals",
+        value: true,
+      },
+      timeoutMs: 1_000,
+    });
+
+    const client = getMockClientByPort(851);
+    await vi.waitFor(() => {
+      expect(
+        client!.activeSubscriptions["192.168.1.120.1.1:851"],
+      ).toBeDefined();
+    });
+    const subscription = Object.values(
+      client!.activeSubscriptions["192.168.1.120.1.1:851"]!,
+    )[0];
+
+    subscription.settings.callback(
+      {
+        timestamp: new Date("2026-01-03T00:00:00.000Z"),
+        value: true,
+      },
+      subscription,
+    );
+
+    const result = await waitPromise;
+    expect(result.status).toBe("fulfilled");
+    expect(result.conditionMatched).toBe(true);
+    expect(result.values).toMatchObject([
+      {
+        name: "MAIN.watch",
+        value: true,
+        timestamp: "2026-01-03T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("stops creating wait subscriptions after an early anyOf latestData match", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    mockState.values["MAIN.value"] = 42;
+    mockState.values["MAIN.watch"] = false;
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 10,
+      maxNotifications: 128,
+    });
+
+    const result = await service.waitUntil({
+      condition: {
+        anyOf: [
+          {
+            name: "MAIN.value",
+            operator: "equals",
+            value: 42,
+          },
+          {
+            name: "MAIN.watch",
+            operator: "equals",
+            value: true,
+          },
+        ],
+      },
+      timeoutMs: 1_000,
+    });
+
+    const client = getMockClientByPort(851);
+    expect(result.status).toBe("fulfilled");
+    expect(mockState.subscribeCalls).toBe(1);
+    expect(mockState.unsubscribeCalls).toBe(1);
+    expect(
+      Object.keys(client!.activeSubscriptions["192.168.1.120.1.1:851"] ?? {}),
+    ).toHaveLength(0);
+  });
+
+  it("returns timeout when a PLC wait condition is not fulfilled", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    mockState.values["MAIN.watch"] = false;
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 10,
+      maxNotifications: 128,
+    });
+
+    const result = await service.waitUntil({
+      condition: {
+        name: "MAIN.watch",
+        operator: "equals",
+        value: true,
+      },
+      timeoutMs: 10,
+    });
+
+    expect(result.status).toBe("timeout");
+    expect(result.conditionMatched).toBe(false);
   });
 });
