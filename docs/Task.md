@@ -195,11 +195,15 @@ Fehlerbilder andere sind.
 
 ### 20. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
 
-- `tc_build_project` oder `plc_build_project` evaluieren, je nachdem ob Build projektweit oder PLC-spezifisch sauberer modelliert ist.
+- `tc_build_project` als ersten Build-Toolcall vorsehen, um ein explizit konfiguriertes TwinCAT-/XAE-Projekt zu bauen.
+- `plc_build_project` als PLC-spezifische Variante pruefen, wenn PLC-Projekte eindeutig getrennt vom TwinCAT-Gesamtprojekt adressiert werden koennen.
+- `tc_build_and_get_errors` als begrenztes Kombi-Tool pruefen, das Build ausfuehrt und direkt strukturierte Fehler/Warnings zurueckgibt.
+- Windows-only Engineering-Backend ueber XAE/Visual-Studio Automation Interface und optionalen .NET Helper evaluieren.
+- CoAgent/GAS-`sm.build` nur als Inspiration oder experimentelles Backend vormerken, nicht als erste stabile API annehmen.
 - `tc_error_list` fuer Engineering-/Compiler-/Parserfehler implementieren.
 - `tc_error_context` implementieren, um Fehler mit POU, Buffer, Datei, Zeile und Quelltextausschnitt zu verbinden.
 - `tc_output_read` implementieren, um Build-, Output- oder Engineering-Logs mit Filtern zu lesen.
-- `tc_build_and_get_errors` als begrenztes Kombi-Tool pruefen.
+- Safety-Grenze dokumentieren: Build/Compile darf nicht automatisch Activate Configuration, Download, Login, Start oder Stop ausloesen.
 - Ausgabe immer begrenzen und auf konkrete Fehlerreferenzen statt grosse Dumps optimieren.
 
 ### 21. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
