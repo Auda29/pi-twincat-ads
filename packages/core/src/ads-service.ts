@@ -9,7 +9,9 @@ import {
   type AdsState,
   type AdsSymbol,
   type AdsTcSystemExtendedState,
+  type AmsAddress,
   type ReadRawMultiCommand,
+  type ReadRawMultiResult,
   type ReadValueResult,
   type SubscriptionCallback,
   type SubscriptionData,
@@ -23,6 +25,8 @@ import {
   DEFAULT_NC_ADS_PORT,
   isWriteAllowed,
   type ExtensionRuntimeConfig,
+  type IoDataPointConfig,
+  type NcAxisConfig,
   type TwinCatAdsServiceName,
 } from "./config.js";
 
@@ -160,6 +164,109 @@ export interface PlcReadGroupResult {
   readonly group: string;
   readonly symbols: string[];
   readonly results: PlcReadResult[];
+  readonly count: number;
+}
+
+export interface NcAxisSummary {
+  readonly name: string;
+  readonly id: number;
+  readonly targetAdsPort: number;
+  readonly description?: string;
+}
+
+export interface NcStateResult {
+  readonly connection: AdsClientConnection;
+  readonly adsState: AdsConnectionState;
+  readonly ncRuntimeState: AdsState;
+  readonly ncRuntimeStatus: AdsStateSummary;
+  readonly deviceInfo: AdsClientDeviceInfo;
+  readonly axes: NcAxisSummary[];
+}
+
+export interface NcAxisOnlineState {
+  readonly errorState: number;
+  readonly actualPosition: number;
+  readonly moduloActualPosition: number;
+  readonly setPosition: number;
+  readonly moduloSetPosition: number;
+  readonly actualVelocity: number;
+  readonly setVelocity: number;
+  readonly velocityOverride: number;
+  readonly lagErrorPosition: number;
+  readonly controllerOutputPercent: number;
+  readonly totalOutputPercent: number;
+  readonly stateDWord: number;
+}
+
+export interface NcAxisStatusFlags {
+  readonly ready: boolean;
+  readonly referenced: boolean;
+  readonly protectedMode: boolean;
+  readonly logicalStandstill: boolean;
+  readonly referencing: boolean;
+  readonly inPositionWindow: boolean;
+  readonly atTargetPosition: boolean;
+  readonly constantVelocity: boolean;
+  readonly busy: boolean;
+}
+
+export interface NcAxisReadResult {
+  readonly axis: NcAxisSummary;
+  readonly timestamp: string;
+  readonly online: NcAxisOnlineState;
+  readonly status: NcAxisStatusFlags;
+  readonly errorCode: number;
+}
+
+export interface NcAxisReadManyResult {
+  readonly results: NcAxisReadResult[];
+  readonly count: number;
+}
+
+export interface NcAxisErrorResult {
+  readonly axis: NcAxisSummary;
+  readonly timestamp: string;
+  readonly errorCode: number;
+  readonly hasError: boolean;
+}
+
+export interface IoDataPointSummary {
+  readonly name: string;
+  readonly indexGroup: number;
+  readonly indexOffset: number;
+  readonly type: string;
+  readonly size: number;
+  readonly description?: string;
+}
+
+export interface IoDataPointGroupSummary {
+  readonly name: string;
+  readonly dataPoints: string[];
+  readonly count: number;
+}
+
+export interface IoListGroupsResult {
+  readonly groups: IoDataPointGroupSummary[];
+  readonly dataPoints: IoDataPointSummary[];
+  readonly count: number;
+}
+
+export interface IoReadResult {
+  readonly dataPoint: IoDataPointSummary;
+  readonly value: unknown;
+  readonly rawHex: string;
+  readonly timestamp: string;
+}
+
+export interface IoReadManyResult {
+  readonly results: IoReadResult[];
+  readonly count: number;
+}
+
+export interface IoReadGroupResult {
+  readonly group: string;
+  readonly dataPoints: string[];
+  readonly results: IoReadResult[];
   readonly count: number;
 }
 
@@ -381,6 +488,15 @@ export interface TwinCatAdsService {
   readMany(names: readonly string[]): Promise<PlcReadResult[]>;
   listGroups(): PlcSymbolGroupSummary[];
   readGroup(group: string): Promise<PlcReadGroupResult>;
+  ncState(): Promise<NcStateResult>;
+  ncListAxes(): NcAxisSummary[];
+  ncReadAxis(axis: string | number): Promise<NcAxisReadResult>;
+  ncReadAxisMany(axes: readonly (string | number)[]): Promise<NcAxisReadManyResult>;
+  ncReadError(axis: string | number): Promise<NcAxisErrorResult>;
+  ioListGroups(): IoListGroupsResult;
+  ioRead(name: string): Promise<IoReadResult>;
+  ioReadMany(names: readonly string[]): Promise<IoReadManyResult>;
+  ioReadGroup(group: string): Promise<IoReadGroupResult>;
   writeSymbol<T = unknown>(
     name: string,
     value: T,
@@ -434,10 +550,13 @@ function completeRuntimeConfig(
       nc: {
         targetAdsPort:
           config.services?.nc?.targetAdsPort ?? DEFAULT_NC_ADS_PORT,
+        axes: config.services?.nc?.axes ?? [],
       },
       io: {
         targetAdsPort:
           config.services?.io?.targetAdsPort ?? DEFAULT_IO_ADS_PORT,
+        dataPoints: config.services?.io?.dataPoints ?? [],
+        groups: config.services?.io?.groups ?? {},
       },
     },
   };
@@ -621,6 +740,132 @@ function toRawReadCommand(symbol: AdsSymbol): ReadRawMultiCommand {
     indexOffset: symbol.indexOffset,
     size: symbol.size,
   };
+}
+
+const NC_AXIS_STATE_INDEX_GROUP_BASE = 0x4100;
+const NC_AXIS_ONLINE_STATE_OFFSET = 0x00000000;
+const NC_AXIS_ERROR_CODE_OFFSET = 0x000000b1;
+
+const NC_AXIS_STATUS_OFFSETS = {
+  ready: 0x00000082,
+  referenced: 0x00000083,
+  protectedMode: 0x00000084,
+  logicalStandstill: 0x0000008c,
+  referencing: 0x0000008d,
+  inPositionWindow: 0x0000008e,
+  atTargetPosition: 0x0000008f,
+  constantVelocity: 0x00000090,
+  busy: 0x0000009a,
+} as const;
+
+const IO_TYPE_SIZES = new Map<string, number>([
+  ["BOOL", 1],
+  ["BYTE", 1],
+  ["USINT", 1],
+  ["SINT", 1],
+  ["WORD", 2],
+  ["UINT", 2],
+  ["INT", 2],
+  ["DWORD", 4],
+  ["UDINT", 4],
+  ["DINT", 4],
+  ["REAL", 4],
+  ["LWORD", 8],
+  ["ULINT", 8],
+  ["LINT", 8],
+  ["LREAL", 8],
+  ["REAL64", 8],
+]);
+
+function adsTargetOptions(
+  targetAdsPort: number | undefined,
+): Partial<AmsAddress> | undefined {
+  return targetAdsPort === undefined ? undefined : { adsPort: targetAdsPort };
+}
+
+function axisStateIndexGroup(axisId: number): number {
+  return NC_AXIS_STATE_INDEX_GROUP_BASE + axisId;
+}
+
+function readUInt16Flag(buffer: Buffer): boolean {
+  return buffer.readUInt16LE(0) !== 0;
+}
+
+function decodeNcAxisOnlineState(buffer: Buffer): NcAxisOnlineState {
+  return {
+    errorState: buffer.readInt32LE(0),
+    actualPosition: buffer.readDoubleLE(8),
+    moduloActualPosition: buffer.readDoubleLE(16),
+    setPosition: buffer.readDoubleLE(24),
+    moduloSetPosition: buffer.readDoubleLE(32),
+    actualVelocity: buffer.readDoubleLE(40),
+    setVelocity: buffer.readDoubleLE(48),
+    velocityOverride: buffer.readUInt32LE(56),
+    lagErrorPosition: buffer.readDoubleLE(64),
+    controllerOutputPercent: buffer.readDoubleLE(88),
+    totalOutputPercent: buffer.readDoubleLE(96),
+    stateDWord: buffer.readUInt32LE(104),
+  };
+}
+
+function ioTypeSize(type: string): number | undefined {
+  const normalizedType = type.trim().toUpperCase();
+  const stringMatch = normalizedType.match(/^STRING(?:\((\d+)\))?$/);
+  if (stringMatch) {
+    return Number(stringMatch[1] ?? 81);
+  }
+
+  return IO_TYPE_SIZES.get(normalizedType);
+}
+
+function decodeIoValue(buffer: Buffer, type: string): unknown {
+  const normalizedType = type.trim().toUpperCase();
+  if (normalizedType.startsWith("STRING")) {
+    return buffer.toString("utf8").replace(/\0.*$/u, "");
+  }
+
+  switch (normalizedType) {
+    case "BOOL":
+      return buffer.readUInt8(0) !== 0;
+    case "BYTE":
+    case "USINT":
+      return buffer.readUInt8(0);
+    case "SINT":
+      return buffer.readInt8(0);
+    case "WORD":
+    case "UINT":
+      return buffer.readUInt16LE(0);
+    case "INT":
+      return buffer.readInt16LE(0);
+    case "DWORD":
+    case "UDINT":
+      return buffer.readUInt32LE(0);
+    case "DINT":
+      return buffer.readInt32LE(0);
+    case "REAL":
+      return buffer.readFloatLE(0);
+    case "LWORD":
+    case "ULINT":
+      return buffer.readBigUInt64LE(0);
+    case "LINT":
+      return buffer.readBigInt64LE(0);
+    case "LREAL":
+    case "REAL64":
+      return buffer.readDoubleLE(0);
+    default:
+      return buffer.toString("hex");
+  }
+}
+
+function assertRawReadSuccess(
+  result: ReadRawMultiResult,
+  label: string,
+): Buffer {
+  if (!result.success || result.value === undefined) {
+    throw new Error(`ADS raw read failed for ${label}.`);
+  }
+
+  return result.value;
 }
 
 export class AdsService {
@@ -863,6 +1108,195 @@ export class AdsService {
       symbols: [...symbols],
       results,
       count: results.length,
+    };
+  }
+
+  async ncState(): Promise<NcStateResult> {
+    const client = await this.#connectServiceClient("nc");
+    const [ncRuntimeState, deviceInfo] = await Promise.all([
+      client.readState(),
+      client.readDeviceInfo(),
+    ]);
+
+    return {
+      connection: client.connection,
+      adsState: this.#serviceState(client),
+      ncRuntimeState,
+      ncRuntimeStatus: summarizeAdsState(ncRuntimeState),
+      deviceInfo,
+      axes: this.ncListAxes(),
+    };
+  }
+
+  ncListAxes(): NcAxisSummary[] {
+    return this.config.services.nc.axes
+      .map((axis) => this.#toNcAxisSummary(axis))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  async ncReadAxis(axis: string | number): Promise<NcAxisReadResult> {
+    const axisConfig = this.#resolveNcAxis(axis);
+    const axisSummary = this.#toNcAxisSummary(axisConfig);
+    const client = await this.#connectServiceClient("nc");
+    const targetOptions = adsTargetOptions(axisConfig.targetAdsPort);
+    const indexGroup = axisStateIndexGroup(axisConfig.id);
+
+    const statusCommands = Object.values(NC_AXIS_STATUS_OFFSETS).map(
+      (indexOffset): ReadRawMultiCommand => ({
+        indexGroup,
+        indexOffset,
+        size: 2,
+      }),
+    );
+    const [onlineBuffer, errorBuffer, statusBuffers] = await Promise.all([
+      client.readRaw(indexGroup, NC_AXIS_ONLINE_STATE_OFFSET, 112, targetOptions),
+      client.readRaw(indexGroup, NC_AXIS_ERROR_CODE_OFFSET, 4, targetOptions),
+      client
+        .readRawMulti(statusCommands, targetOptions)
+        .then((results) =>
+          results.map((result, index) =>
+            assertRawReadSuccess(
+              result,
+              `NC axis ${axisSummary.name} status field ${index}`,
+            ),
+          ),
+        ),
+    ]);
+
+    const statusValues = statusBuffers.map(readUInt16Flag);
+    const statusKeys = Object.keys(
+      NC_AXIS_STATUS_OFFSETS,
+    ) as Array<keyof NcAxisStatusFlags>;
+
+    return {
+      axis: axisSummary,
+      timestamp: new Date().toISOString(),
+      online: decodeNcAxisOnlineState(onlineBuffer),
+      status: Object.fromEntries(
+        statusKeys.map((key, index) => [key, statusValues[index] ?? false]),
+      ) as unknown as NcAxisStatusFlags,
+      errorCode: errorBuffer.readUInt32LE(0),
+    };
+  }
+
+  async ncReadAxisMany(
+    axes: readonly (string | number)[],
+  ): Promise<NcAxisReadManyResult> {
+    const results = await Promise.all(
+      axes.map((axis) => this.ncReadAxis(axis)),
+    );
+
+    return {
+      results,
+      count: results.length,
+    };
+  }
+
+  async ncReadError(axis: string | number): Promise<NcAxisErrorResult> {
+    const axisConfig = this.#resolveNcAxis(axis);
+    const axisSummary = this.#toNcAxisSummary(axisConfig);
+    const client = await this.#connectServiceClient("nc");
+    const buffer = await client.readRaw(
+      axisStateIndexGroup(axisConfig.id),
+      NC_AXIS_ERROR_CODE_OFFSET,
+      4,
+      adsTargetOptions(axisConfig.targetAdsPort),
+    );
+    const errorCode = buffer.readUInt32LE(0);
+
+    return {
+      axis: axisSummary,
+      timestamp: new Date().toISOString(),
+      errorCode,
+      hasError: errorCode !== 0,
+    };
+  }
+
+  ioListGroups(): IoListGroupsResult {
+    const groups = Object.entries(this.config.services.io.groups)
+      .map(([name, dataPoints]) => ({
+        name,
+        dataPoints: [...dataPoints],
+        count: dataPoints.length,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const dataPoints = this.#listIoDataPoints();
+
+    return {
+      groups,
+      dataPoints,
+      count: groups.length,
+    };
+  }
+
+  async ioRead(name: string): Promise<IoReadResult> {
+    const dataPoint = this.#resolveIoDataPoint(name);
+    const summary = this.#toIoDataPointSummary(dataPoint);
+    const client = await this.#connectServiceClient("io");
+    const rawValue = await client.readRaw(
+      dataPoint.indexGroup,
+      dataPoint.indexOffset,
+      summary.size,
+    );
+
+    return {
+      dataPoint: summary,
+      value: decodeIoValue(rawValue, dataPoint.type),
+      rawHex: rawValue.toString("hex"),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  async ioReadMany(names: readonly string[]): Promise<IoReadManyResult> {
+    const dataPoints = names.map((name) => this.#resolveIoDataPoint(name));
+    const client = await this.#connectServiceClient("io");
+    const rawResults = await client.readRawMulti(
+      dataPoints.map((dataPoint) => {
+        const summary = this.#toIoDataPointSummary(dataPoint);
+        return {
+          indexGroup: dataPoint.indexGroup,
+          indexOffset: dataPoint.indexOffset,
+          size: summary.size,
+        };
+      }),
+    );
+    const timestamp = new Date().toISOString();
+    const results = rawResults.map((result, index): IoReadResult => {
+      const dataPoint = dataPoints[index];
+      if (dataPoint === undefined) {
+        throw new Error(`Internal IO data point mapping failed at index ${index}.`);
+      }
+
+      const summary = this.#toIoDataPointSummary(dataPoint);
+      const rawValue = assertRawReadSuccess(result, `IO data point ${summary.name}`);
+      return {
+        dataPoint: summary,
+        value: decodeIoValue(rawValue, dataPoint.type),
+        rawHex: rawValue.toString("hex"),
+        timestamp,
+      };
+    });
+
+    return {
+      results,
+      count: results.length,
+    };
+  }
+
+  async ioReadGroup(group: string): Promise<IoReadGroupResult> {
+    const normalizedGroup = group.trim();
+    const dataPoints = this.config.services.io.groups[normalizedGroup];
+
+    if (dataPoints === undefined) {
+      throw new Error(`IO group "${normalizedGroup}" was not found.`);
+    }
+
+    const result = await this.ioReadMany(dataPoints);
+    return {
+      group: normalizedGroup,
+      dataPoints: [...dataPoints],
+      results: result.results,
+      count: result.count,
     };
   }
 
@@ -1427,8 +1861,99 @@ export class AdsService {
     return client;
   }
 
+  async #connectServiceClient(name: TwinCatAdsServiceName): Promise<Client> {
+    await this.connectService(name);
+    return this.#getExistingServiceClient(name);
+  }
+
   #serviceState(client: Client): AdsConnectionState {
     return client.connection.connected ? "connected" : "disconnected";
+  }
+
+  #toNcAxisSummary(axis: NcAxisConfig): NcAxisSummary {
+    const summary: {
+      name: string;
+      id: number;
+      targetAdsPort: number;
+      description?: string;
+    } = {
+      name: axis.name,
+      id: axis.id,
+      targetAdsPort: axis.targetAdsPort ?? this.config.services.nc.targetAdsPort,
+    };
+
+    if (axis.description !== undefined) {
+      summary.description = axis.description;
+    }
+
+    return summary;
+  }
+
+  #resolveNcAxis(axis: string | number): NcAxisConfig {
+    const normalizedAxis =
+      typeof axis === "number" ? String(axis) : axis.trim();
+    const numericAxis = Number(normalizedAxis);
+
+    const axisConfig = this.config.services.nc.axes.find(
+      (entry) =>
+        entry.name.toLowerCase() === normalizedAxis.toLowerCase() ||
+        (Number.isInteger(numericAxis) && entry.id === numericAxis),
+    );
+
+    if (axisConfig === undefined) {
+      throw new Error(`NC axis "${normalizedAxis}" was not found.`);
+    }
+
+    return axisConfig;
+  }
+
+  #toIoDataPointSummary(dataPoint: IoDataPointConfig): IoDataPointSummary {
+    const size = dataPoint.size ?? ioTypeSize(dataPoint.type);
+    if (size === undefined) {
+      throw new Error(
+        `IO data point "${dataPoint.name}" uses unsupported type "${dataPoint.type}". Configure size to read it as raw data.`,
+      );
+    }
+
+    const summary: {
+      name: string;
+      indexGroup: number;
+      indexOffset: number;
+      type: string;
+      size: number;
+      description?: string;
+    } = {
+      name: dataPoint.name,
+      indexGroup: dataPoint.indexGroup,
+      indexOffset: dataPoint.indexOffset,
+      type: dataPoint.type,
+      size,
+    };
+
+    if (dataPoint.description !== undefined) {
+      summary.description = dataPoint.description;
+    }
+
+    return summary;
+  }
+
+  #listIoDataPoints(): IoDataPointSummary[] {
+    return this.config.services.io.dataPoints
+      .map((dataPoint) => this.#toIoDataPointSummary(dataPoint))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  #resolveIoDataPoint(name: string): IoDataPointConfig {
+    const normalizedName = name.trim();
+    const dataPoint = this.config.services.io.dataPoints.find(
+      (entry) => entry.name.toLowerCase() === normalizedName.toLowerCase(),
+    );
+
+    if (dataPoint === undefined) {
+      throw new Error(`IO data point "${normalizedName}" was not found.`);
+    }
+
+    return dataPoint;
   }
 
   async #loadSymbolCache(): Promise<void> {

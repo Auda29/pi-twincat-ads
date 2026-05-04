@@ -33,9 +33,27 @@ describe("core config contract", () => {
         },
         nc: {
           targetAdsPort: 501,
+          axes: [
+            {
+              name: "X",
+              id: 1,
+              description: "X axis",
+            },
+          ],
         },
         io: {
           targetAdsPort: 301,
+          dataPoints: [
+            {
+              name: "Input1",
+              indexGroup: 0xf020,
+              indexOffset: 0x1f400,
+              type: "bool",
+            },
+          ],
+          groups: {
+            inputs: ["Input1"],
+          },
         },
       },
     });
@@ -47,8 +65,30 @@ describe("core config contract", () => {
         status: ["MAIN.ready", "MAIN.error"],
       },
     });
-    expect(config.services.nc.targetAdsPort).toBe(501);
-    expect(config.services.io.targetAdsPort).toBe(301);
+    expect(config.services.nc).toEqual({
+      targetAdsPort: 501,
+      axes: [
+        {
+          name: "X",
+          id: 1,
+          description: "X axis",
+        },
+      ],
+    });
+    expect(config.services.io).toEqual({
+      targetAdsPort: 301,
+      dataPoints: [
+        {
+          name: "Input1",
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+        },
+      ],
+      groups: {
+        inputs: ["Input1"],
+      },
+    });
   });
 
   it("keeps writes behind readOnly and exact allowlist checks", () => {

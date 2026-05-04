@@ -61,6 +61,149 @@ function createRuntimeStub() {
       ],
       count: 1,
     }),
+    ncState: async () => ({
+      connection: { connected: true },
+      adsState: "connected" as const,
+      ncRuntimeState: { adsState: 5, deviceState: 0 },
+      ncRuntimeStatus: {
+        adsState: 5,
+        adsStateName: "Run",
+        deviceState: 0,
+        isRun: true,
+        isStop: false,
+      },
+      deviceInfo: { deviceName: "Mock NC" },
+      axes: [{ name: "X", id: 1, targetAdsPort: 500 }],
+    }),
+    ncListAxes: () => [{ name: "X", id: 1, targetAdsPort: 500 }],
+    ncReadAxis: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      online: {
+        errorState: 0,
+        actualPosition: 12.5,
+        moduloActualPosition: 12.5,
+        setPosition: 13.5,
+        moduloSetPosition: 13.5,
+        actualVelocity: 2.5,
+        setVelocity: 3.5,
+        velocityOverride: 1000000,
+        lagErrorPosition: 0,
+        controllerOutputPercent: 0,
+        totalOutputPercent: 0,
+        stateDWord: 0,
+      },
+      status: {
+        ready: true,
+        referenced: true,
+        protectedMode: false,
+        logicalStandstill: false,
+        referencing: false,
+        inPositionWindow: true,
+        atTargetPosition: false,
+        constantVelocity: true,
+        busy: false,
+      },
+      errorCode: 0,
+    }),
+    ncReadAxisMany: async ({ axes }: { axes: Array<string | number> }) => ({
+      results: axes.map((axis) => ({
+        axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+        timestamp: "2026-01-01T00:00:00.000Z",
+        online: {
+          errorState: 0,
+          actualPosition: 12.5,
+          moduloActualPosition: 12.5,
+          setPosition: 13.5,
+          moduloSetPosition: 13.5,
+          actualVelocity: 2.5,
+          setVelocity: 3.5,
+          velocityOverride: 1000000,
+          lagErrorPosition: 0,
+          controllerOutputPercent: 0,
+          totalOutputPercent: 0,
+          stateDWord: 0,
+        },
+        status: {
+          ready: true,
+          referenced: true,
+          protectedMode: false,
+          logicalStandstill: false,
+          referencing: false,
+          inPositionWindow: true,
+          atTargetPosition: false,
+          constantVelocity: true,
+          busy: false,
+        },
+        errorCode: 0,
+      })),
+      count: axes.length,
+    }),
+    ncReadError: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      errorCode: 0,
+      hasError: false,
+    }),
+    ioListGroups: () => ({
+      groups: [{ name: "inputs", dataPoints: ["Input1"], count: 1 }],
+      dataPoints: [
+        {
+          name: "Input1",
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+          size: 1,
+        },
+      ],
+      count: 1,
+    }),
+    ioRead: async ({ name }: { name: string }) => ({
+      dataPoint: {
+        name,
+        indexGroup: 0xf020,
+        indexOffset: 0x1f400,
+        type: "BOOL",
+        size: 1,
+      },
+      value: true,
+      rawHex: "01",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    }),
+    ioReadMany: async ({ names }: { names: string[] }) => ({
+      results: names.map((name) => ({
+        dataPoint: {
+          name,
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+          size: 1,
+        },
+        value: true,
+        rawHex: "01",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      })),
+      count: names.length,
+    }),
+    ioReadGroup: async ({ group }: { group: string }) => ({
+      group,
+      dataPoints: ["Input1"],
+      results: [
+        {
+          dataPoint: {
+            name: "Input1",
+            indexGroup: 0xf020,
+            indexOffset: 0x1f400,
+            type: "BOOL",
+            size: 1,
+          },
+          value: true,
+          rawHex: "01",
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      count: 1,
+    }),
     readState: async () => ({
       connection: { connected: true },
       adsState: "connected" as const,
@@ -214,6 +357,48 @@ describe("tools", () => {
     if (result.ok) {
       expect(result.data.count).toBe(1);
       expect(result.data.groups[0]?.name).toBe("status");
+    }
+  });
+
+  it("returns configured NC axes and axis reads", async () => {
+    const tools = createToolDefinitions();
+    const listTool = tools.find((entry) => entry.name === "nc_list_axes");
+    const readTool = tools.find((entry) => entry.name === "nc_read_axis");
+    expect(listTool).toBeDefined();
+    expect(readTool).toBeDefined();
+
+    const listResult = await listTool!.execute(
+      {},
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(listResult.ok).toBe(true);
+    if (listResult.ok) {
+      expect(listResult.data.axes[0]?.name).toBe("X");
+    }
+
+    const readResult = await readTool!.execute(
+      { axis: "X" },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(readResult.ok).toBe(true);
+    if (readResult.ok) {
+      expect(readResult.data.result.online.actualPosition).toBe(12.5);
+    }
+  });
+
+  it("reads configured IO groups", async () => {
+    const tools = createToolDefinitions();
+    const tool = tools.find((entry) => entry.name === "io_read_group");
+    expect(tool).toBeDefined();
+
+    const result = await tool!.execute(
+      { group: "inputs" },
+      { runtime: createRuntimeStub() as never },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.group.results[0]?.value).toBe(true);
     }
   });
 

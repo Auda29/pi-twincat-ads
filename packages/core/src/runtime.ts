@@ -1,6 +1,15 @@
 import type { TwinCatAdsRuntimeConfig } from "./config.js";
 import type {
   AdsConnectionInfo,
+  IoListGroupsResult,
+  IoReadGroupResult,
+  IoReadManyResult,
+  IoReadResult,
+  NcAxisErrorResult,
+  NcAxisReadManyResult,
+  NcAxisReadResult,
+  NcAxisSummary,
+  NcStateResult,
   PlcWriteAccessResult,
   PlcReadResult,
   PlcReadGroupResult,
@@ -31,6 +40,26 @@ export interface ReadManyInput {
 }
 
 export interface ReadGroupInput {
+  readonly group: string;
+}
+
+export interface AxisInput {
+  readonly axis: string | number;
+}
+
+export interface ReadAxisManyInput {
+  readonly axes: readonly (string | number)[];
+}
+
+export interface IoReadInput {
+  readonly name: string;
+}
+
+export interface IoReadManyInput {
+  readonly names: readonly string[];
+}
+
+export interface IoReadGroupInput {
   readonly group: string;
 }
 
@@ -67,6 +96,15 @@ export interface TwinCatAdsOperations {
   readMany(input: ReadManyInput): Promise<PlcReadResult[]>;
   listGroups(): PlcSymbolGroupSummary[];
   readGroup(input: ReadGroupInput): Promise<PlcReadGroupResult>;
+  ncState(): Promise<NcStateResult>;
+  ncListAxes(): NcAxisSummary[];
+  ncReadAxis(input: AxisInput): Promise<NcAxisReadResult>;
+  ncReadAxisMany(input: ReadAxisManyInput): Promise<NcAxisReadManyResult>;
+  ncReadError(input: AxisInput): Promise<NcAxisErrorResult>;
+  ioListGroups(): IoListGroupsResult;
+  ioRead(input: IoReadInput): Promise<IoReadResult>;
+  ioReadMany(input: IoReadManyInput): Promise<IoReadManyResult>;
+  ioReadGroup(input: IoReadGroupInput): Promise<IoReadGroupResult>;
   writeSymbol<T = unknown>(
     input: WriteSymbolInput<T>,
   ): Promise<PlcWriteResult<T>>;
@@ -103,6 +141,15 @@ export function createTwinCatAdsRuntime(
     readMany: async (input) => service.readMany(input.names),
     listGroups: () => service.listGroups(),
     readGroup: async (input) => service.readGroup(input.group),
+    ncState: async () => service.ncState(),
+    ncListAxes: () => service.ncListAxes(),
+    ncReadAxis: async (input) => service.ncReadAxis(input.axis),
+    ncReadAxisMany: async (input) => service.ncReadAxisMany(input.axes),
+    ncReadError: async (input) => service.ncReadError(input.axis),
+    ioListGroups: () => service.ioListGroups(),
+    ioRead: async (input) => service.ioRead(input.name),
+    ioReadMany: async (input) => service.ioReadMany(input.names),
+    ioReadGroup: async (input) => service.ioReadGroup(input.group),
     writeSymbol: async (input) => service.writeSymbol(input.name, input.value),
     waitUntil: async (input) => service.waitUntil(input),
     watchSymbol: async (input) => {

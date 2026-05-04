@@ -58,10 +58,24 @@ Direct mode additionally uses:
       "symbolGroups": {}
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": [
+        { "name": "X", "id": 1 }
+      ]
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [
+        {
+          "name": "Input1",
+          "indexGroup": 61472,
+          "indexOffset": 128000,
+          "type": "BOOL"
+        }
+      ],
+      "groups": {
+        "inputs": ["Input1"]
+      }
     }
   }
 }
@@ -86,6 +100,21 @@ PLC reads and state:
 
 `plc_state` includes ADS connection state, write gates, watch count, and a
 readable PLC runtime status summary such as `Run` or `Stop`.
+
+NC read-only:
+
+- `nc_state`
+- `nc_list_axes`
+- `nc_read_axis`
+- `nc_read_axis_many`
+- `nc_read_error`
+
+IO read-only:
+
+- `io_list_groups`
+- `io_read`
+- `io_read_many`
+- `io_read_group`
 
 Writes and write gates:
 

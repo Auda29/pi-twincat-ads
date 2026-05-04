@@ -54,10 +54,13 @@ the usual choice when the host already has a working ADS router:
       "symbolGroups": {}
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": []
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [],
+      "groups": {}
     }
   }
 }
@@ -85,10 +88,24 @@ connects directly to the PLC or router endpoint:
       }
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": [
+        { "name": "X", "id": 1 }
+      ]
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [
+        {
+          "name": "Input1",
+          "indexGroup": 61472,
+          "indexOffset": 128000,
+          "type": "BOOL"
+        }
+      ],
+      "groups": {
+        "inputs": ["Input1"]
+      }
     }
   }
 }
@@ -106,8 +123,11 @@ Common fields:
 - `maxWaitUntilMs`: maximum accepted `plc_wait_until` timeout, default `600000`
 - `services.plc.targetAdsPort`: effective PLC ADS port, default `851`
 - `services.plc.symbolGroups`: named PLC symbol groups for `plc_read_group`
-- `services.nc.targetAdsPort`: NC ADS port reserved for multi-service use, default `500`
-- `services.io.targetAdsPort`: IO ADS port reserved for multi-service use, default `300`
+- `services.nc.targetAdsPort`: NC ADS port, default `500`
+- `services.nc.axes`: configured NC axes for `nc_list_axes`, `nc_read_axis`, and `nc_read_error`
+- `services.io.targetAdsPort`: IO ADS port, default `300`
+- `services.io.dataPoints`: named IO raw ADS addresses with `indexGroup`, `indexOffset`, and type
+- `services.io.groups`: named IO data point groups for `io_read_group`
 
 ## Safety Model
 
@@ -154,8 +174,9 @@ twincat-mcp --config ./plc.config.json
 
 Config can also be supplied with `TWINCAT_ADS_CONFIG` or environment variables
 such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP exposes PLC reads, writes,
-symbol description, configured groups, watches, and wait-until operations as
-tools. Watches are modeled as normal tools, not as MCP resources or
+symbol description, configured groups, watches, wait-until operations, NC
+read-only axis diagnostics, and IO read-only data point/group reads as tools.
+Watches are modeled as normal tools, not as MCP resources or
 subscriptions yet.
 
 See `packages/mcp/README.md` for tool names and configuration details.

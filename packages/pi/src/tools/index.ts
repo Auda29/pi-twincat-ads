@@ -2,6 +2,15 @@ import { z } from "zod";
 
 import {
   WriteDeniedError,
+  type IoListGroupsResult,
+  type IoReadGroupResult,
+  type IoReadManyResult,
+  type IoReadResult,
+  type NcAxisErrorResult,
+  type NcAxisReadManyResult,
+  type NcAxisReadResult,
+  type NcAxisSummary,
+  type NcStateResult,
   type PlcReadGroupResult,
   type PlcReadResult,
   type PlcStateResult,
@@ -47,6 +56,52 @@ const readManyInputSchema = z
 const readGroupInputSchema = z
   .object({
     group: z.string().trim().min(1, "PLC symbol group must not be empty."),
+  })
+  .strict();
+
+const axisRefSchema = z.union([
+  z.string().trim().min(1, "NC axis must not be empty."),
+  z.number().int().min(1, "NC axis id must be at least 1."),
+]);
+
+const ncReadAxisInputSchema = z
+  .object({
+    axis: axisRefSchema,
+  })
+  .strict();
+
+const ncReadAxisManyInputSchema = z
+  .object({
+    axes: z
+      .array(axisRefSchema)
+      .min(1, "At least one NC axis is required.")
+      .max(64, "At most 64 NC axes can be read at once."),
+  })
+  .strict();
+
+const ioDataPointNameSchema = z
+  .string()
+  .trim()
+  .min(1, "IO data point name must not be empty.");
+
+const ioReadInputSchema = z
+  .object({
+    name: ioDataPointNameSchema,
+  })
+  .strict();
+
+const ioReadManyInputSchema = z
+  .object({
+    names: z
+      .array(ioDataPointNameSchema)
+      .min(1, "At least one IO data point is required.")
+      .max(250, "At most 250 IO data points can be read at once."),
+  })
+  .strict();
+
+const ioReadGroupInputSchema = z
+  .object({
+    group: z.string().trim().min(1, "IO group must not be empty."),
   })
   .strict();
 
@@ -219,6 +274,26 @@ export interface PlcListGroupsToolOutput {
 export interface PlcReadGroupToolOutput {
   readonly group: PlcReadGroupResult;
 }
+export interface NcStateToolOutput extends NcStateResult {}
+export interface NcListAxesToolOutput {
+  readonly axes: NcAxisSummary[];
+  readonly count: number;
+}
+export interface NcReadAxisToolOutput {
+  readonly result: NcAxisReadResult;
+}
+export interface NcReadAxisManyToolOutput extends NcAxisReadManyResult {}
+export interface NcReadErrorToolOutput {
+  readonly error: NcAxisErrorResult;
+}
+export interface IoListGroupsToolOutput extends IoListGroupsResult {}
+export interface IoReadToolOutput {
+  readonly result: IoReadResult;
+}
+export interface IoReadManyToolOutput extends IoReadManyResult {}
+export interface IoReadGroupToolOutput {
+  readonly group: IoReadGroupResult;
+}
 export interface PlcWriteToolOutput {
   readonly result: {
     readonly name: string;
@@ -324,6 +399,18 @@ export function createToolDefinitions(): Array<
   | ToolDefinition<z.infer<typeof readInputSchema>, PlcReadToolOutput>
   | ToolDefinition<z.infer<typeof readManyInputSchema>, PlcReadManyToolOutput>
   | ToolDefinition<z.infer<typeof readGroupInputSchema>, PlcReadGroupToolOutput>
+  | ToolDefinition<z.infer<typeof ncReadAxisInputSchema>, NcReadAxisToolOutput>
+  | ToolDefinition<
+      z.infer<typeof ncReadAxisManyInputSchema>,
+      NcReadAxisManyToolOutput
+    >
+  | ToolDefinition<z.infer<typeof ncReadAxisInputSchema>, NcReadErrorToolOutput>
+  | ToolDefinition<z.infer<typeof ioReadInputSchema>, IoReadToolOutput>
+  | ToolDefinition<z.infer<typeof ioReadManyInputSchema>, IoReadManyToolOutput>
+  | ToolDefinition<z.infer<typeof ioReadGroupInputSchema>, IoReadGroupToolOutput>
+  | ToolDefinition<z.infer<typeof stateInputSchema>, NcStateToolOutput>
+  | ToolDefinition<z.infer<typeof stateInputSchema>, NcListAxesToolOutput>
+  | ToolDefinition<z.infer<typeof stateInputSchema>, IoListGroupsToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcListGroupsToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcStateToolOutput>
   | ToolDefinition<z.infer<typeof writeInputSchema>, PlcWriteToolOutput>
@@ -409,6 +496,75 @@ export function createToolDefinitions(): Array<
       inputSchema: readGroupInputSchema,
       handler: async (input, context) => ({
         group: await context.runtime.readGroup(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "nc_state",
+      description: "Inspect NC ADS connection and runtime state.",
+      inputSchema: stateInputSchema,
+      handler: async (_input, context) => context.runtime.ncState(),
+    }),
+    createToolDefinition({
+      name: "nc_list_axes",
+      description: "List configured NC axes.",
+      inputSchema: stateInputSchema,
+      handler: async (_input, context) => {
+        const axes = context.runtime.ncListAxes();
+        return {
+          axes,
+          count: axes.length,
+        };
+      },
+    }),
+    createToolDefinition({
+      name: "nc_read_axis",
+      description:
+        "Read configured NC axis online state, status flags, position, velocity, and error code.",
+      inputSchema: ncReadAxisInputSchema,
+      handler: async (input, context) => ({
+        result: await context.runtime.ncReadAxis(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "nc_read_axis_many",
+      description: "Read multiple configured NC axes.",
+      inputSchema: ncReadAxisManyInputSchema,
+      handler: async (input, context) => context.runtime.ncReadAxisMany(input),
+    }),
+    createToolDefinition({
+      name: "nc_read_error",
+      description: "Read the current error code for a configured NC axis.",
+      inputSchema: ncReadAxisInputSchema,
+      handler: async (input, context) => ({
+        error: await context.runtime.ncReadError(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "io_list_groups",
+      description: "List configured IO groups and data points.",
+      inputSchema: stateInputSchema,
+      handler: async (_input, context) => context.runtime.ioListGroups(),
+    }),
+    createToolDefinition({
+      name: "io_read",
+      description: "Read a configured IO data point by ADS indexGroup/indexOffset.",
+      inputSchema: ioReadInputSchema,
+      handler: async (input, context) => ({
+        result: await context.runtime.ioRead(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "io_read_many",
+      description: "Read multiple configured IO data points with one ADS sum read.",
+      inputSchema: ioReadManyInputSchema,
+      handler: async (input, context) => context.runtime.ioReadMany(input),
+    }),
+    createToolDefinition({
+      name: "io_read_group",
+      description: "Read all configured IO data points in an IO group.",
+      inputSchema: ioReadGroupInputSchema,
+      handler: async (input, context) => ({
+        group: await context.runtime.ioReadGroup(input),
       }),
     }),
     createToolDefinition({
@@ -543,6 +699,11 @@ export {
   readInputSchema,
   readManyInputSchema,
   readGroupInputSchema,
+  ncReadAxisInputSchema,
+  ncReadAxisManyInputSchema,
+  ioReadInputSchema,
+  ioReadManyInputSchema,
+  ioReadGroupInputSchema,
   stateInputSchema,
   writeInputSchema,
   setWriteModeInputSchema,

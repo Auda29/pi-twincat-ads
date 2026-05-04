@@ -3,14 +3,16 @@ name: twincat-ads
 description: >-
   TwinCAT ADS via pi-twincat-ads (plc_state, plc_list_symbols,
   plc_describe_symbol, plc_read, plc_read_many, plc_list_groups,
-  plc_read_group, plc_write, plc_watch, plc_wait_until). Use when inspecting or
-  changing TwinCAT PLC symbols, runtime state, configured symbol groups, or ADS
-  watches over a configured ADS connection.
+  plc_read_group, plc_write, plc_watch, plc_wait_until, nc_state,
+  nc_list_axes, nc_read_axis, nc_read_axis_many, nc_read_error, io_list_groups,
+  io_read, io_read_many, io_read_group). Use when inspecting TwinCAT PLC
+  symbols, NC axis state, IO data points, runtime state, configured groups, or
+  ADS watches over a configured ADS connection.
 ---
 
 # TwinCAT ADS Skill
 
-Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime values over ADS.
+Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime values over ADS, or safely manipulate explicitly allowed PLC symbols.
 
 ## Recommended workflow
 
@@ -18,11 +20,13 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 2. Use `plc_list_symbols` if the exact symbol path is not certain.
 3. Use `plc_describe_symbol` when type, size, array bounds, or struct members matter.
 4. Use `plc_list_groups` and `plc_read_group` when the config defines reusable PLC symbol groups.
-5. Use `plc_read` or `plc_read_many` before making decisions.
-6. Use `plc_wait_until` for a specific state transition or condition; use `plc_watch` for ongoing observation.
-7. Only use `plc_write` after checking state, symbol path, and write permissions.
-8. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
-9. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
+5. Use `nc_state`, `nc_list_axes`, `nc_read_axis`, or `nc_read_error` when the task concerns NC axes, motion state, position, velocity, or NC errors.
+6. Use `io_list_groups`, `io_read`, `io_read_many`, or `io_read_group` when the task concerns configured IO process data, sensors, valves, safety inputs, or outputs.
+7. Use `plc_read` or `plc_read_many` before making decisions.
+8. Use `plc_wait_until` for a specific PLC state transition or condition; use `plc_watch` for ongoing PLC observation.
+9. Only use `plc_write` after checking state, symbol path, and write permissions.
+10. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
+11. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
 
 ## Tool guidance
 
@@ -64,6 +68,69 @@ Use this skill when the agent needs to inspect or manipulate TwinCAT PLC runtime
 - If a group read fails for one symbol, treat that as useful drift information and verify symbol names with `plc_list_symbols` or `plc_describe_symbol`.
 - A good group name is short and task-oriented, for example `machine`, `axisX`, `alarms`, `cycle`, or `safetyInputs`.
 - Build groups from symbols you have verified through `plc_list_symbols`, `plc_describe_symbol`, or successful reads.
+
+### NC axes
+
+- NC access is read-only in this package.
+- Use `nc_state` to verify the configured NC ADS service state before relying on axis reads.
+- Use `nc_list_axes` to inspect configured axes. Do this before `nc_read_axis` unless the user or config context already gives an exact axis name or ID.
+- Use `nc_read_axis` for one configured axis when you need position, velocity, status flags, state double word, and error code.
+- Use `nc_read_axis_many` when comparing several configured axes.
+- Use `nc_read_error` when the task is focused on an NC or axis error.
+- NC axes must be configured under `services.nc.axes` with at least `name` and `id`. Optional fields are `targetAdsPort` and `description`.
+- A minimal NC config looks like:
+
+```json
+{
+  "services": {
+    "nc": {
+      "targetAdsPort": 500,
+      "axes": [
+        { "name": "X", "id": 1 },
+        { "name": "Y", "id": 2 }
+      ]
+    }
+  }
+}
+```
+
+- Do not invent axis IDs. Ask for the configured axis name/ID or use `nc_list_axes`.
+- Treat NC status and error reads as diagnostics. Follow-up actions such as PLC reads or writes must be separate, deliberate tool calls.
+
+### IO data points
+
+- IO access is read-only in this package.
+- Use `io_list_groups` to inspect configured IO groups and data points.
+- Use `io_read` for one configured IO data point.
+- Use `io_read_many` when several IO values are needed together.
+- Use `io_read_group` when the config defines a meaningful IO snapshot such as `inputs`, `outputs`, `safety`, `valves`, or `sensors`.
+- IO data points must be configured under `services.io.dataPoints` with `name`, `indexGroup`, `indexOffset`, and `type`. Optional fields are `size` and `description`.
+- IO groups are configured under `services.io.groups` as lists of configured data point names.
+- A minimal IO config looks like:
+
+```json
+{
+  "services": {
+    "io": {
+      "targetAdsPort": 300,
+      "dataPoints": [
+        {
+          "name": "Input1",
+          "indexGroup": 61472,
+          "indexOffset": 128000,
+          "type": "BOOL"
+        }
+      ],
+      "groups": {
+        "inputs": ["Input1"]
+      }
+    }
+  }
+}
+```
+
+- Do not invent raw IO addresses. If a needed data point is missing, explain the config entry that would be required.
+- IO reads return decoded values plus raw hex. Use raw hex when type decoding looks suspicious or when checking bit-level process data.
 
 ### Finding symbol paths
 

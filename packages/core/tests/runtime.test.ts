@@ -87,6 +87,100 @@ function createServiceStub() {
         count: 0,
       };
     },
+    ncState: async () => {
+      calls.push("ncState");
+      return {
+        connection: { connected: true },
+        adsState: "connected",
+        ncRuntimeState: { adsState: 5, deviceState: 0 },
+        ncRuntimeStatus: {
+          adsState: 5,
+          adsStateName: "Run",
+          deviceState: 0,
+          isRun: true,
+          isStop: false,
+        },
+        deviceInfo: {},
+        axes: [],
+      };
+    },
+    ncListAxes: () => {
+      calls.push("ncListAxes");
+      return [];
+    },
+    ncReadAxis: async (axis) => {
+      calls.push(`ncReadAxis:${axis}`);
+      return {
+        axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+        timestamp: "2026-01-01T00:00:00.000Z",
+        online: {
+          errorState: 0,
+          actualPosition: 1,
+          moduloActualPosition: 1,
+          setPosition: 1,
+          moduloSetPosition: 1,
+          actualVelocity: 0,
+          setVelocity: 0,
+          velocityOverride: 1000000,
+          lagErrorPosition: 0,
+          controllerOutputPercent: 0,
+          totalOutputPercent: 0,
+          stateDWord: 0,
+        },
+        status: {
+          ready: true,
+          referenced: true,
+          protectedMode: false,
+          logicalStandstill: true,
+          referencing: false,
+          inPositionWindow: true,
+          atTargetPosition: true,
+          constantVelocity: false,
+          busy: false,
+        },
+        errorCode: 0,
+      };
+    },
+    ncReadAxisMany: async (axes) => {
+      calls.push(`ncReadAxisMany:${axes.join(",")}`);
+      return { results: [], count: 0 };
+    },
+    ncReadError: async (axis) => {
+      calls.push(`ncReadError:${axis}`);
+      return {
+        axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+        timestamp: "2026-01-01T00:00:00.000Z",
+        errorCode: 0,
+        hasError: false,
+      };
+    },
+    ioListGroups: () => {
+      calls.push("ioListGroups");
+      return { groups: [], dataPoints: [], count: 0 };
+    },
+    ioRead: async (name) => {
+      calls.push(`ioRead:${name}`);
+      return {
+        dataPoint: {
+          name,
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+          size: 1,
+        },
+        value: true,
+        rawHex: "01",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      };
+    },
+    ioReadMany: async (names) => {
+      calls.push(`ioReadMany:${names.join(",")}`);
+      return { results: [], count: 0 };
+    },
+    ioReadGroup: async (group) => {
+      calls.push(`ioReadGroup:${group}`);
+      return { group, dataPoints: [], results: [], count: 0 };
+    },
     writeSymbol: async (name, value) => {
       calls.push(`writeSymbol:${name}`);
       return {
@@ -216,6 +310,15 @@ describe("core runtime contract", () => {
     await runtime.readMany({ names: ["MAIN.a", "MAIN.b"] });
     runtime.listGroups();
     await runtime.readGroup({ group: "status" });
+    await runtime.ncState();
+    runtime.ncListAxes();
+    await runtime.ncReadAxis({ axis: "X" });
+    await runtime.ncReadAxisMany({ axes: ["X", "Y"] });
+    await runtime.ncReadError({ axis: "X" });
+    runtime.ioListGroups();
+    await runtime.ioRead({ name: "Input1" });
+    await runtime.ioReadMany({ names: ["Input1", "Output1"] });
+    await runtime.ioReadGroup({ group: "inputs" });
     await runtime.writeSymbol({ name: "MAIN.value", value: 7 });
     await runtime.watchSymbol({ name: "MAIN.value" });
     await runtime.waitUntil({
@@ -236,6 +339,15 @@ describe("core runtime contract", () => {
       "readMany:MAIN.a,MAIN.b",
       "listGroups",
       "readGroup:status",
+      "ncState",
+      "ncListAxes",
+      "ncReadAxis:X",
+      "ncReadAxisMany:X,Y",
+      "ncReadError:X",
+      "ioListGroups",
+      "ioRead:Input1",
+      "ioReadMany:Input1,Output1",
+      "ioReadGroup:inputs",
       "writeSymbol:MAIN.value",
       "watchSymbol:MAIN.value",
       "waitUntil:100",

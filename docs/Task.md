@@ -117,7 +117,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - Dokumentieren, dass das Tool nur auf das Ereignis wartet; Folgeaktionen wie `tc_diagnose_errors`, `plc_read_group` oder `tc_diagnose_runtime` fuehrt der Agent danach als separate Toolcalls aus.
 - Tests fuer Erfolg, Timeout, Cancel, Mehrsymbol-Bedingungen und stabile Zustandsdauer ergaenzen.
 
-### 13. NC-Read-Only-Tools einfuehren `[Open]`
+### 13. NC-Read-Only-Tools einfuehren `[Done]`
 
 - NC-Zugriff zunaechst strikt read-only halten.
 - Config fuer NC-Achsen definieren, z. B. Name, Achs-ID und optional Service-Port.
@@ -126,7 +126,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - `nc_read_axis` und `nc_read_axis_many` implementieren, um Achszustand, Position, Geschwindigkeit, Status und Fehler gezielt zu lesen.
 - `nc_read_error` implementieren, um NC- oder Achsenfehler fokussiert auszulesen.
 
-### 14. IO-Read-Only-Tools und IO-Gruppen einfuehren `[Open]`
+### 14. IO-Read-Only-Tools und IO-Gruppen einfuehren `[Done]`
 
 - IO-Zugriff zunaechst strikt read-only halten.
 - Config fuer einzelne IO-Datenpunkte definieren: Name, `indexGroup`, `indexOffset`, Typ und optional Beschreibung.

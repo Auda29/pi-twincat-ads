@@ -68,6 +68,149 @@ function createRuntimeStub(
       ],
       count: 1,
     }),
+    ncState: async () => ({
+      connection: { connected: true },
+      adsState: "connected" as const,
+      ncRuntimeState: { adsState: 5, deviceState: 0 },
+      ncRuntimeStatus: {
+        adsState: 5,
+        adsStateName: "Run",
+        deviceState: 0,
+        isRun: true,
+        isStop: false,
+      },
+      deviceInfo: { deviceName: "Mock NC" },
+      axes: [{ name: "X", id: 1, targetAdsPort: 500 }],
+    }),
+    ncListAxes: () => [{ name: "X", id: 1, targetAdsPort: 500 }],
+    ncReadAxis: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      online: {
+        errorState: 0,
+        actualPosition: 12.5,
+        moduloActualPosition: 12.5,
+        setPosition: 13.5,
+        moduloSetPosition: 13.5,
+        actualVelocity: 2.5,
+        setVelocity: 3.5,
+        velocityOverride: 1000000,
+        lagErrorPosition: 0,
+        controllerOutputPercent: 0,
+        totalOutputPercent: 0,
+        stateDWord: 0,
+      },
+      status: {
+        ready: true,
+        referenced: true,
+        protectedMode: false,
+        logicalStandstill: false,
+        referencing: false,
+        inPositionWindow: true,
+        atTargetPosition: false,
+        constantVelocity: true,
+        busy: false,
+      },
+      errorCode: 0,
+    }),
+    ncReadAxisMany: async ({ axes }: { axes: Array<string | number> }) => ({
+      results: axes.map((axis) => ({
+        axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+        timestamp: "2026-01-01T00:00:00.000Z",
+        online: {
+          errorState: 0,
+          actualPosition: 12.5,
+          moduloActualPosition: 12.5,
+          setPosition: 13.5,
+          moduloSetPosition: 13.5,
+          actualVelocity: 2.5,
+          setVelocity: 3.5,
+          velocityOverride: 1000000,
+          lagErrorPosition: 0,
+          controllerOutputPercent: 0,
+          totalOutputPercent: 0,
+          stateDWord: 0,
+        },
+        status: {
+          ready: true,
+          referenced: true,
+          protectedMode: false,
+          logicalStandstill: false,
+          referencing: false,
+          inPositionWindow: true,
+          atTargetPosition: false,
+          constantVelocity: true,
+          busy: false,
+        },
+        errorCode: 0,
+      })),
+      count: axes.length,
+    }),
+    ncReadError: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      errorCode: 0,
+      hasError: false,
+    }),
+    ioListGroups: () => ({
+      groups: [{ name: "inputs", dataPoints: ["Input1"], count: 1 }],
+      dataPoints: [
+        {
+          name: "Input1",
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+          size: 1,
+        },
+      ],
+      count: 1,
+    }),
+    ioRead: async ({ name }: { name: string }) => ({
+      dataPoint: {
+        name,
+        indexGroup: 0xf020,
+        indexOffset: 0x1f400,
+        type: "BOOL",
+        size: 1,
+      },
+      value: true,
+      rawHex: "01",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    }),
+    ioReadMany: async ({ names }: { names: string[] }) => ({
+      results: names.map((name) => ({
+        dataPoint: {
+          name,
+          indexGroup: 0xf020,
+          indexOffset: 0x1f400,
+          type: "BOOL",
+          size: 1,
+        },
+        value: true,
+        rawHex: "01",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      })),
+      count: names.length,
+    }),
+    ioReadGroup: async ({ group }: { group: string }) => ({
+      group,
+      dataPoints: ["Input1"],
+      results: [
+        {
+          dataPoint: {
+            name: "Input1",
+            indexGroup: 0xf020,
+            indexOffset: 0x1f400,
+            type: "BOOL",
+            size: 1,
+          },
+          value: true,
+          rawHex: "01",
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      count: 1,
+    }),
     writeSymbol: async ({ name, value }: { name: string; value: unknown }) => ({
       name,
       value,
@@ -179,6 +322,15 @@ describe("mcp tool definitions", () => {
       "plc_read_many",
       "plc_list_groups",
       "plc_read_group",
+      "nc_state",
+      "nc_list_axes",
+      "nc_read_axis",
+      "nc_read_axis_many",
+      "nc_read_error",
+      "io_list_groups",
+      "io_read",
+      "io_read_many",
+      "io_read_group",
       "plc_write",
       "plc_watch",
       "plc_wait_until",
@@ -269,5 +421,28 @@ describe("mcp tool definitions", () => {
       "unsubscribe" in
         (result.structuredContent as { watch: Record<string, unknown> }).watch,
     ).toBe(false);
+  });
+
+  it("dispatches NC and IO read-only tools", async () => {
+    const tools = createMcpToolDefinitions(createRuntimeStub());
+
+    const ncResult = await callMcpTool(tools, "nc_read_axis", { axis: "X" });
+    expect(ncResult.isError).toBeUndefined();
+    expect(ncResult.structuredContent).toMatchObject({
+      result: {
+        axis: { name: "X" },
+        online: { actualPosition: 12.5 },
+      },
+    });
+
+    const ioResult = await callMcpTool(tools, "io_read_group", {
+      group: "inputs",
+    });
+    expect(ioResult.isError).toBeUndefined();
+    expect(ioResult.structuredContent).toMatchObject({
+      group: {
+        results: [{ value: true }],
+      },
+    });
   });
 });

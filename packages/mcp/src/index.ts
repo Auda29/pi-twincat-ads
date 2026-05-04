@@ -57,6 +57,45 @@ const readGroupInputSchema = z
     group: z.string().trim().min(1, "PLC symbol group must not be empty."),
   })
   .strict();
+const axisRefSchema = z.union([
+  z.string().trim().min(1, "NC axis must not be empty."),
+  z.number().int().min(1, "NC axis id must be at least 1."),
+]);
+const ncReadAxisInputSchema = z
+  .object({
+    axis: axisRefSchema,
+  })
+  .strict();
+const ncReadAxisManyInputSchema = z
+  .object({
+    axes: z
+      .array(axisRefSchema)
+      .min(1, "At least one NC axis is required.")
+      .max(64, "At most 64 NC axes can be read at once."),
+  })
+  .strict();
+const ioDataPointNameSchema = z
+  .string()
+  .trim()
+  .min(1, "IO data point name must not be empty.");
+const ioReadInputSchema = z
+  .object({
+    name: ioDataPointNameSchema,
+  })
+  .strict();
+const ioReadManyInputSchema = z
+  .object({
+    names: z
+      .array(ioDataPointNameSchema)
+      .min(1, "At least one IO data point is required.")
+      .max(250, "At most 250 IO data points can be read at once."),
+  })
+  .strict();
+const ioReadGroupInputSchema = z
+  .object({
+    group: z.string().trim().min(1, "IO group must not be empty."),
+  })
+  .strict();
 const writeInputSchema = z
   .object({
     name: symbolNameSchema,
@@ -354,6 +393,95 @@ export function createMcpToolDefinitions(
       annotations: { readOnlyHint: true, openWorldHint: true },
       execute: async (input: z.infer<typeof readGroupInputSchema>) => ({
         group: await runtime.readGroup(input),
+      }),
+    },
+    {
+      name: "nc_state",
+      title: "NC State",
+      description: "Inspect NC ADS connection and runtime state.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async () => runtime.ncState(),
+    },
+    {
+      name: "nc_list_axes",
+      title: "NC List Axes",
+      description: "List configured NC axes.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: () => {
+        const axes = runtime.ncListAxes();
+        return {
+          axes,
+          count: axes.length,
+        };
+      },
+    },
+    {
+      name: "nc_read_axis",
+      title: "NC Read Axis",
+      description:
+        "Read configured NC axis online state, status flags, position, velocity, and error code.",
+      inputSchema: ncReadAxisInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ncReadAxisInputSchema>) => ({
+        result: await runtime.ncReadAxis(input),
+      }),
+    },
+    {
+      name: "nc_read_axis_many",
+      title: "NC Read Axis Many",
+      description: "Read multiple configured NC axes.",
+      inputSchema: ncReadAxisManyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ncReadAxisManyInputSchema>) =>
+        runtime.ncReadAxisMany(input),
+    },
+    {
+      name: "nc_read_error",
+      title: "NC Read Error",
+      description: "Read the current error code for a configured NC axis.",
+      inputSchema: ncReadAxisInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ncReadAxisInputSchema>) => ({
+        error: await runtime.ncReadError(input),
+      }),
+    },
+    {
+      name: "io_list_groups",
+      title: "IO List Groups",
+      description: "List configured IO groups and data points.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      execute: () => runtime.ioListGroups(),
+    },
+    {
+      name: "io_read",
+      title: "IO Read",
+      description: "Read a configured IO data point by ADS indexGroup/indexOffset.",
+      inputSchema: ioReadInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ioReadInputSchema>) => ({
+        result: await runtime.ioRead(input),
+      }),
+    },
+    {
+      name: "io_read_many",
+      title: "IO Read Many",
+      description: "Read multiple configured IO data points with one ADS sum read.",
+      inputSchema: ioReadManyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ioReadManyInputSchema>) =>
+        runtime.ioReadMany(input),
+    },
+    {
+      name: "io_read_group",
+      title: "IO Read Group",
+      description: "Read all configured IO data points in an IO group.",
+      inputSchema: ioReadGroupInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ioReadGroupInputSchema>) => ({
+        group: await runtime.ioReadGroup(input),
       }),
     },
     {

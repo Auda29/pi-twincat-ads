@@ -20,6 +20,11 @@ type RegisteredHook = RegisteredExtension["hooks"][number];
 
 const emptySchema = Type.Object({}, { additionalProperties: false });
 const symbolNameSchema = Type.String({ minLength: 1 });
+const axisRefSchema = Type.Union([
+  Type.String({ minLength: 1 }),
+  Type.Integer({ minimum: 1 }),
+]);
+const ioDataPointNameSchema = Type.String({ minLength: 1 });
 const watchModeType = Type.Union([
   Type.Literal("on-change"),
   Type.Literal("cyclic"),
@@ -239,6 +244,83 @@ function formatToolSuccess(toolName: string, data: unknown): string {
     return `ADS=${result.adsState}, PLC=${formatAdsStateSummary(result)}, writeMode=${result.writeMode}, watches=${result.watchCount}`;
   }
 
+  if (toolName === "nc_state") {
+    const result = data as {
+      adsState: string;
+      ncRuntimeStatus?: {
+        adsState: number;
+        adsStateName: string;
+        deviceState: number;
+      };
+      axes: unknown[];
+    };
+    const ncState =
+      result.ncRuntimeStatus === undefined
+        ? "unknown"
+        : `${result.ncRuntimeStatus.adsStateName} (adsState=${result.ncRuntimeStatus.adsState}, deviceState=${result.ncRuntimeStatus.deviceState})`;
+    return `ADS=${result.adsState}, NC=${ncState}, configured axes=${result.axes.length}`;
+  }
+
+  if (toolName === "nc_list_axes") {
+    const result = data as { count: number };
+    return `Listed ${result.count} configured NC axes.`;
+  }
+
+  if (toolName === "nc_read_axis") {
+    const result = data as {
+      result: {
+        axis: { name: string; id: number };
+        online: { actualPosition: number; actualVelocity: number };
+        errorCode: number;
+        timestamp: string;
+      };
+    };
+    return `NC axis ${result.result.axis.name} (id ${result.result.axis.id}) position=${result.result.online.actualPosition}, velocity=${result.result.online.actualVelocity}, error=${result.result.errorCode} @ ${result.result.timestamp}`;
+  }
+
+  if (toolName === "nc_read_axis_many") {
+    const result = data as { count: number };
+    return `Read ${result.count} NC axes successfully.`;
+  }
+
+  if (toolName === "nc_read_error") {
+    const result = data as {
+      error: {
+        axis: { name: string; id: number };
+        errorCode: number;
+        hasError: boolean;
+        timestamp: string;
+      };
+    };
+    return `NC axis ${result.error.axis.name} (id ${result.error.axis.id}) error=${result.error.errorCode}, hasError=${result.error.hasError} @ ${result.error.timestamp}`;
+  }
+
+  if (toolName === "io_list_groups") {
+    const result = data as { count: number; dataPoints: unknown[] };
+    return `Listed ${result.count} IO groups and ${result.dataPoints.length} configured IO data points.`;
+  }
+
+  if (toolName === "io_read") {
+    const result = data as {
+      result: {
+        dataPoint: { name: string; type: string };
+        value: unknown;
+        timestamp: string;
+      };
+    };
+    return `Read IO ${result.result.dataPoint.name} = ${formatValue(result.result.value)} (${result.result.dataPoint.type}) @ ${result.result.timestamp}`;
+  }
+
+  if (toolName === "io_read_many") {
+    const result = data as { count: number };
+    return `Read ${result.count} IO data points successfully.`;
+  }
+
+  if (toolName === "io_read_group") {
+    const result = data as { group: { group: string; count: number } };
+    return `Read IO group ${result.group.group} with ${result.group.count} data points.`;
+  }
+
   if (toolName === "plc_watch") {
     const result = data as { watch: { name: string; notificationHandle: number } };
     return `Watch active for ${result.watch.name} (handle ${result.watch.notificationHandle}).`;
@@ -391,6 +473,97 @@ const toolSpecs: ToolSpec[] = [
     name: "plc_read_group",
     label: "PLC Read Group",
     description: "Read all symbols from a configured PLC symbol group.",
+    parameters: Type.Object(
+      {
+        group: Type.String({ minLength: 1 }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "nc_state",
+    label: "NC State",
+    description: "Inspect NC ADS connection and runtime state.",
+    parameters: emptySchema,
+  },
+  {
+    name: "nc_list_axes",
+    label: "NC Axes",
+    description: "List configured NC axes.",
+    parameters: emptySchema,
+  },
+  {
+    name: "nc_read_axis",
+    label: "NC Read Axis",
+    description:
+      "Read configured NC axis online state, status flags, position, velocity, and error code.",
+    parameters: Type.Object(
+      {
+        axis: axisRefSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "nc_read_axis_many",
+    label: "NC Read Axes",
+    description: "Read multiple configured NC axes.",
+    parameters: Type.Object(
+      {
+        axes: Type.Array(axisRefSchema, {
+          minItems: 1,
+          maxItems: 64,
+        }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "nc_read_error",
+    label: "NC Read Error",
+    description: "Read the current error code for a configured NC axis.",
+    parameters: Type.Object(
+      {
+        axis: axisRefSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "io_list_groups",
+    label: "IO Groups",
+    description: "List configured IO groups and data points.",
+    parameters: emptySchema,
+  },
+  {
+    name: "io_read",
+    label: "IO Read",
+    description: "Read a configured IO data point by ADS indexGroup/indexOffset.",
+    parameters: Type.Object(
+      {
+        name: ioDataPointNameSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "io_read_many",
+    label: "IO Read Many",
+    description: "Read multiple configured IO data points with one ADS sum read.",
+    parameters: Type.Object(
+      {
+        names: Type.Array(ioDataPointNameSchema, {
+          minItems: 1,
+          maxItems: 250,
+        }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "io_read_group",
+    label: "IO Read Group",
+    description: "Read all configured IO data points in an IO group.",
     parameters: Type.Object(
       {
         group: Type.String({ minLength: 1 }),

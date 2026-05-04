@@ -59,6 +59,15 @@ The runtime exposes transport-free PLC operations:
 - `readMany`
 - `listGroups`
 - `readGroup`
+- `ncState`
+- `ncListAxes`
+- `ncReadAxis`
+- `ncReadAxisMany`
+- `ncReadError`
+- `ioListGroups`
+- `ioRead`
+- `ioReadMany`
+- `ioReadGroup`
 - `writeSymbol`
 - `watchSymbol`
 - `waitUntil`
@@ -95,10 +104,13 @@ Router mode:
       "symbolGroups": {}
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": []
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [],
+      "groups": {}
     }
   }
 }
@@ -125,20 +137,41 @@ Direct mode:
       }
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": [
+        { "name": "X", "id": 1 }
+      ]
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [
+        {
+          "name": "Input1",
+          "indexGroup": 61472,
+          "indexOffset": 128000,
+          "type": "BOOL"
+        }
+      ],
+      "groups": {
+        "inputs": ["Input1"]
+      }
     }
   }
 }
 ```
 
 `services.plc.targetAdsPort` is the effective PLC ADS port when present. The
-top-level `targetAdsPort` remains accepted for compatibility. `services.nc` and
-`services.io` configure reusable ADS clients for NC and IO service layers.
-Configured PLC `symbolGroups` can be listed with `listGroups` and read with
-`readGroup`.
+top-level `targetAdsPort` remains accepted for compatibility. Configured PLC
+`symbolGroups` can be listed with `listGroups` and read with `readGroup`.
+
+`services.nc.axes` defines read-only NC axes by name and axis ID. The NC runtime
+uses ADS port `500` by default and reads axis state from the NC ADS axis state
+index group.
+
+`services.io.dataPoints` defines read-only IO ADS raw addresses. Each data point
+has `name`, `indexGroup`, `indexOffset`, `type`, and optional `size` and
+`description`. `services.io.groups` maps group names to configured data point
+names.
 
 `readState` returns ADS connection state, write policy, watch count, raw ADS
 state objects, and readable PLC/TwinCAT state summaries such as `Run` or

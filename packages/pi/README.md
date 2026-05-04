@@ -45,10 +45,13 @@ Default local config:
       "symbolGroups": {}
     },
     "nc": {
-      "targetAdsPort": 500
+      "targetAdsPort": 500,
+      "axes": []
     },
     "io": {
-      "targetAdsPort": 300
+      "targetAdsPort": 300,
+      "dataPoints": [],
+      "groups": {}
     }
   }
 }
@@ -75,6 +78,26 @@ readable PLC runtime status summary such as `Run` or `Stop`.
 Configured groups are created in config under `services.plc.symbolGroups`.
 `plc_list_groups` lists those group names and `plc_read_group` reads all
 symbols in one group.
+
+NC read-only:
+
+- `nc_state`
+- `nc_list_axes`
+- `nc_read_axis`
+- `nc_read_axis_many`
+- `nc_read_error`
+
+Configure NC axes under `services.nc.axes` with `name` and `id`.
+
+IO read-only:
+
+- `io_list_groups`
+- `io_read`
+- `io_read_many`
+- `io_read_group`
+
+Configure IO data points under `services.io.dataPoints` and group them under
+`services.io.groups`.
 
 Write control:
 

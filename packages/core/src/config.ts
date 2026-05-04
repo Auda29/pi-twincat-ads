@@ -60,6 +60,12 @@ const symbolPathSchema = z
   .min(1, "Allowlist entries must not be empty.")
   .transform((value) => value.trim());
 
+const namedConfigEntrySchema = z
+  .string()
+  .trim()
+  .min(1, "Configured names must not be empty.")
+  .transform((value) => value.trim());
+
 const plcSymbolGroupsSchema = z
   .record(
     z
@@ -80,11 +86,73 @@ const plcAdsServiceConfigSchema = adsServiceConfigSchema
   })
   .strict();
 
+const ncAxisConfigSchema = z
+  .object({
+    name: namedConfigEntrySchema,
+    id: z
+      .number()
+      .int()
+      .min(1, "NC axis id must be at least 1.")
+      .max(65_535, "NC axis id must be 65535 or lower."),
+    targetAdsPort: adsPortSchema.optional(),
+    description: z.string().trim().optional(),
+  })
+  .strict();
+
+const ncAdsServiceConfigSchema = adsServiceConfigSchema
+  .extend({
+    axes: z.array(ncAxisConfigSchema).default([]),
+  })
+  .strict();
+
+const ioDataPointConfigSchema = z
+  .object({
+    name: namedConfigEntrySchema,
+    indexGroup: z
+      .number()
+      .int()
+      .min(0, "IO indexGroup must be 0 or greater.")
+      .max(0xffffffff, "IO indexGroup must fit into UINT32."),
+    indexOffset: z
+      .number()
+      .int()
+      .min(0, "IO indexOffset must be 0 or greater.")
+      .max(0xffffffff, "IO indexOffset must fit into UINT32."),
+    type: z
+      .string()
+      .trim()
+      .min(1, "IO data point type must not be empty.")
+      .transform((value) => value.trim().toUpperCase()),
+    size: z
+      .number()
+      .int()
+      .min(1, "IO data point size must be at least 1 byte.")
+      .max(65_535, "IO data point size must be 65535 bytes or lower.")
+      .optional(),
+    description: z.string().trim().optional(),
+  })
+  .strict();
+
+const ioDataPointGroupsSchema = z
+  .record(
+    z
+      .array(namedConfigEntrySchema)
+      .min(1, "IO groups must contain at least one data point."),
+  )
+  .default({});
+
+const ioAdsServiceConfigSchema = adsServiceConfigSchema
+  .extend({
+    dataPoints: z.array(ioDataPointConfigSchema).default([]),
+    groups: ioDataPointGroupsSchema,
+  })
+  .strict();
+
 const adsServicesConfigSchema = z
   .object({
     plc: plcAdsServiceConfigSchema.optional(),
-    nc: adsServiceConfigSchema.optional(),
-    io: adsServiceConfigSchema.optional(),
+    nc: ncAdsServiceConfigSchema.optional(),
+    io: ioAdsServiceConfigSchema.optional(),
   })
   .strict()
   .default({});
@@ -155,10 +223,31 @@ export interface AdsNamedServiceConfig {
 export interface PlcAdsNamedServiceConfig extends AdsNamedServiceConfig {
   readonly symbolGroups: Record<string, string[]>;
 }
+export interface NcAxisConfig {
+  readonly name: string;
+  readonly id: number;
+  readonly targetAdsPort?: number | undefined;
+  readonly description?: string | undefined;
+}
+export interface NcAdsNamedServiceConfig extends AdsNamedServiceConfig {
+  readonly axes: NcAxisConfig[];
+}
+export interface IoDataPointConfig {
+  readonly name: string;
+  readonly indexGroup: number;
+  readonly indexOffset: number;
+  readonly type: string;
+  readonly size?: number | undefined;
+  readonly description?: string | undefined;
+}
+export interface IoAdsNamedServiceConfig extends AdsNamedServiceConfig {
+  readonly dataPoints: IoDataPointConfig[];
+  readonly groups: Record<string, string[]>;
+}
 export interface TwinCatAdsServiceConfigs {
   readonly plc: PlcAdsNamedServiceConfig;
-  readonly nc: AdsNamedServiceConfig;
-  readonly io: AdsNamedServiceConfig;
+  readonly nc: NcAdsNamedServiceConfig;
+  readonly io: IoAdsNamedServiceConfig;
 }
 
 export type AdsConnectionMode = z.infer<
@@ -208,10 +297,13 @@ function normalizeServiceConfigs(
     nc: {
       targetAdsPort:
         config.services.nc?.targetAdsPort ?? DEFAULT_NC_ADS_PORT,
+      axes: config.services.nc?.axes ?? [],
     },
     io: {
       targetAdsPort:
         config.services.io?.targetAdsPort ?? DEFAULT_IO_ADS_PORT,
+      dataPoints: config.services.io?.dataPoints ?? [],
+      groups: config.services.io?.groups ?? {},
     },
   };
 }
