@@ -96,6 +96,74 @@ const ioReadGroupInputSchema = z
     group: z.string().trim().min(1, "IO group must not be empty."),
   })
   .strict();
+const diagnosticSeveritySchema = z.enum([
+  "critical",
+  "error",
+  "warning",
+  "info",
+  "verbose",
+  "unknown",
+]);
+const diagnosticSeverityInputSchema = z.union([
+  diagnosticSeveritySchema,
+  z
+    .array(diagnosticSeveritySchema)
+    .min(1, "At least one severity is required.")
+    .max(6, "At most 6 severities are supported."),
+]);
+const diagnosticDateTimeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) => !Number.isNaN(Date.parse(value)),
+    "Date/time must be parseable.",
+  );
+const diagnosticSourceInputSchema = z
+  .string()
+  .trim()
+  .min(1, "Diagnostic source must not be empty.");
+const tcEventListInputSchema = z
+  .object({
+    source: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Event limit must be at least 1.")
+      .max(500, "Event limit must be 500 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+    id: z
+      .union([
+        z.number().int().min(0),
+        z.array(z.number().int().min(0)).min(1).max(100),
+      ])
+      .optional(),
+  })
+  .strict();
+const tcLogReadInputSchema = z
+  .object({
+    source: diagnosticSourceInputSchema.optional(),
+    limitBytes: z
+      .number()
+      .int()
+      .min(1_024, "Log byte limit must be at least 1024 bytes.")
+      .max(1_048_576, "Log byte limit must be 1048576 bytes or lower.")
+      .optional(),
+    tailLines: z
+      .number()
+      .int()
+      .min(1, "Tail line limit must be at least 1.")
+      .max(5_000, "Tail line limit must be 5000 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+  })
+  .strict();
 const writeInputSchema = z
   .object({
     name: symbolNameSchema,
@@ -483,6 +551,45 @@ export function createMcpToolDefinitions(
       execute: async (input: z.infer<typeof ioReadGroupInputSchema>) => ({
         group: await runtime.ioReadGroup(input),
       }),
+    },
+    {
+      name: "tc_state",
+      title: "TwinCAT State",
+      description:
+        "Inspect compact TwinCAT-wide ADS, PLC, NC, and diagnostics capability state.",
+      inputSchema: emptyInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async () => runtime.tcState(),
+    },
+    {
+      name: "tc_event_list",
+      title: "TwinCAT Events",
+      description:
+        "List recent TwinCAT runtime events from a configured diagnostic source.",
+      inputSchema: tcEventListInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof tcEventListInputSchema>) =>
+        runtime.tcEventList(input),
+    },
+    {
+      name: "tc_runtime_error_list",
+      title: "TwinCAT Runtime Errors",
+      description:
+        "List recent critical/error TwinCAT runtime events from a configured diagnostic source.",
+      inputSchema: tcEventListInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof tcEventListInputSchema>) =>
+        runtime.tcRuntimeErrorList(input),
+    },
+    {
+      name: "tc_log_read",
+      title: "TwinCAT Runtime Log",
+      description:
+        "Read bounded runtime log text from a configured diagnostic source.",
+      inputSchema: tcLogReadInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof tcLogReadInputSchema>) =>
+        runtime.tcLogRead(input),
     },
     {
       name: "plc_write",

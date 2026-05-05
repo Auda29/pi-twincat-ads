@@ -266,5 +266,7 @@ For Phase 2:
 2. Make Windows Event Log / `Get-TcEvent` the pragmatic first Windows backend.
 3. Keep TwinCAT 3 EventLogger user mode API as the preferred structured backend,
    likely via an optional helper once the .NET integration is validated.
-4. Implement `tc_log_read` only for explicitly configured log sources.
+4. Implement `tc_log_read` for configured log sources, with a bounded local
+   Windows Event Log default that reports unavailable capability metadata when
+   the local API is missing.
 5. Keep Engineering build output and XAE output window access in Phase 3.

@@ -211,6 +211,99 @@ function createRuntimeStub(
       ],
       count: 1,
     }),
+    tcState: async () => ({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      adsState: "connected" as const,
+      services: [],
+      plc: {
+        available: true,
+        data: await runtime.readState(),
+      },
+      nc: {
+        available: true,
+        data: await runtime.ncState(),
+      },
+      diagnostics: {
+        eventSources: [
+          {
+            id: "events",
+            kind: "windowsEventLog",
+            available: true,
+          },
+        ],
+        logSources: [
+          {
+            id: "logs",
+            kind: "file",
+            available: true,
+          },
+        ],
+      },
+    }),
+    tcEventList: async () => ({
+      source: "events",
+      available: true,
+      capability: {
+        id: "events",
+        kind: "windowsEventLog",
+        available: true,
+      },
+      events: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "warning" as const,
+          id: 100,
+          message: "Runtime warning",
+        },
+      ],
+      count: 1,
+      truncated: false,
+      query: { limit: 50 },
+    }),
+    tcRuntimeErrorList: async () => ({
+      source: "events",
+      available: true,
+      capability: {
+        id: "events",
+        kind: "windowsEventLog",
+        available: true,
+      },
+      events: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "error" as const,
+          id: 101,
+          message: "Runtime error",
+        },
+      ],
+      errors: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "error" as const,
+          id: 101,
+          message: "Runtime error",
+        },
+      ],
+      count: 1,
+      truncated: false,
+      query: { limit: 50, severity: ["critical", "error"] },
+    }),
+    tcLogRead: async () => ({
+      source: "logs",
+      available: true,
+      capability: {
+        id: "logs",
+        kind: "file",
+        available: true,
+      },
+      text: "Runtime log",
+      bytesRead: 11,
+      truncated: false,
+      query: { limitBytes: 1024 },
+    }),
     writeSymbol: async ({ name, value }: { name: string; value: unknown }) => ({
       name,
       value,
@@ -331,6 +424,10 @@ describe("mcp tool definitions", () => {
       "io_read",
       "io_read_many",
       "io_read_group",
+      "tc_state",
+      "tc_event_list",
+      "tc_runtime_error_list",
+      "tc_log_read",
       "plc_write",
       "plc_watch",
       "plc_wait_until",
@@ -443,6 +540,44 @@ describe("mcp tool definitions", () => {
       group: {
         results: [{ value: true }],
       },
+    });
+  });
+
+  it("dispatches TwinCAT-wide diagnostic tools", async () => {
+    const tools = createMcpToolDefinitions(createRuntimeStub());
+
+    const state = await callMcpTool(tools, "tc_state", {});
+    expect(state.isError).toBeUndefined();
+    expect(state.structuredContent).toMatchObject({
+      adsState: "connected",
+      diagnostics: {
+        eventSources: [{ id: "events" }],
+      },
+    });
+
+    const events = await callMcpTool(tools, "tc_event_list", {
+      severity: "warning",
+    });
+    expect(events.isError).toBeUndefined();
+    expect(events.structuredContent).toMatchObject({
+      events: [{ source: "TcSysSrv", severity: "warning" }],
+      count: 1,
+    });
+
+    const errors = await callMcpTool(tools, "tc_runtime_error_list", {});
+    expect(errors.isError).toBeUndefined();
+    expect(errors.structuredContent).toMatchObject({
+      errors: [{ severity: "error" }],
+      count: 1,
+    });
+
+    const log = await callMcpTool(tools, "tc_log_read", {
+      limitBytes: 1024,
+    });
+    expect(log.isError).toBeUndefined();
+    expect(log.structuredContent).toMatchObject({
+      text: "Runtime log",
+      bytesRead: 11,
     });
   });
 });

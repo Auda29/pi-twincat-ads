@@ -82,6 +82,19 @@ The current Pi package exposes:
 - `plc_wait_until`
 - `plc_unwatch`
 - `plc_list_watches`
+- `nc_state`
+- `nc_list_axes`
+- `nc_read_axis`
+- `nc_read_axis_many`
+- `nc_read_error`
+- `io_list_groups`
+- `io_read`
+- `io_read_many`
+- `io_read_group`
+- `tc_state`
+- `tc_event_list`
+- `tc_runtime_error_list`
+- `tc_log_read`
 
 `plc_set_target` is not part of the current monorepo adapter API. Change target
 configuration by editing the config file or environment used to start Pi.

@@ -33,6 +33,18 @@ const writeModeType = Type.Union([
   Type.Literal("read-only"),
   Type.Literal("enabled"),
 ]);
+const diagnosticSeverityType = Type.Union([
+  Type.Literal("critical"),
+  Type.Literal("error"),
+  Type.Literal("warning"),
+  Type.Literal("info"),
+  Type.Literal("verbose"),
+  Type.Literal("unknown"),
+]);
+const diagnosticSeverityInputType = Type.Union([
+  diagnosticSeverityType,
+  Type.Array(diagnosticSeverityType, { minItems: 1, maxItems: 6 }),
+]);
 
 function textContent(text: string) {
   return [{ type: "text" as const, text }];
@@ -321,6 +333,54 @@ function formatToolSuccess(toolName: string, data: unknown): string {
     return `Read IO group ${result.group.group} with ${result.group.count} data points.`;
   }
 
+  if (toolName === "tc_state") {
+    const result = data as {
+      adsState: string;
+      services: unknown[];
+      plc: { available: boolean };
+      nc: { available: boolean };
+      diagnostics: { eventSources: unknown[]; logSources: unknown[] };
+    };
+    return `TwinCAT ADS=${result.adsState}, services=${result.services.length}, PLC available=${result.plc.available}, NC available=${result.nc.available}, event sources=${result.diagnostics.eventSources.length}, log sources=${result.diagnostics.logSources.length}.`;
+  }
+
+  if (toolName === "tc_event_list") {
+    const result = data as {
+      available: boolean;
+      count: number;
+      source: string | null;
+      capability: { reason?: string };
+    };
+    return result.available
+      ? `Listed ${result.count} TwinCAT events from ${result.source ?? "default source"}.`
+      : `TwinCAT events unavailable: ${result.capability.reason ?? "no source available"}.`;
+  }
+
+  if (toolName === "tc_runtime_error_list") {
+    const result = data as {
+      available: boolean;
+      count: number;
+      source: string | null;
+      capability: { reason?: string };
+    };
+    return result.available
+      ? `Listed ${result.count} TwinCAT runtime errors from ${result.source ?? "default source"}.`
+      : `TwinCAT runtime errors unavailable: ${result.capability.reason ?? "no source available"}.`;
+  }
+
+  if (toolName === "tc_log_read") {
+    const result = data as {
+      available: boolean;
+      bytesRead: number;
+      source: string | null;
+      truncated: boolean;
+      capability: { reason?: string };
+    };
+    return result.available
+      ? `Read ${result.bytesRead} bytes from ${result.source ?? "default log source"} (truncated=${result.truncated}).`
+      : `TwinCAT runtime log unavailable: ${result.capability.reason ?? "no source available"}.`;
+  }
+
   if (toolName === "plc_watch") {
     const result = data as { watch: { name: string; notificationHandle: number } };
     return `Watch active for ${result.watch.name} (handle ${result.watch.notificationHandle}).`;
@@ -567,6 +627,86 @@ const toolSpecs: ToolSpec[] = [
     parameters: Type.Object(
       {
         group: Type.String({ minLength: 1 }),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "tc_state",
+    label: "TwinCAT State",
+    description:
+      "Inspect compact TwinCAT-wide ADS, PLC, NC, and diagnostics capability state.",
+    parameters: emptySchema,
+  },
+  {
+    name: "tc_event_list",
+    label: "TwinCAT Events",
+    description:
+      "List recent TwinCAT runtime events from a configured diagnostic source.",
+    parameters: Type.Object(
+      {
+        source: Type.Optional(Type.String({ minLength: 1 })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+        since: Type.Optional(Type.String({ minLength: 1 })),
+        until: Type.Optional(Type.String({ minLength: 1 })),
+        severity: Type.Optional(diagnosticSeverityInputType),
+        contains: Type.Optional(Type.String({ minLength: 1 })),
+        id: Type.Optional(
+          Type.Union([
+            Type.Integer({ minimum: 0 }),
+            Type.Array(Type.Integer({ minimum: 0 }), {
+              minItems: 1,
+              maxItems: 100,
+            }),
+          ]),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "tc_runtime_error_list",
+    label: "TwinCAT Runtime Errors",
+    description:
+      "List recent critical/error TwinCAT runtime events from a configured diagnostic source.",
+    parameters: Type.Object(
+      {
+        source: Type.Optional(Type.String({ minLength: 1 })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
+        since: Type.Optional(Type.String({ minLength: 1 })),
+        until: Type.Optional(Type.String({ minLength: 1 })),
+        severity: Type.Optional(diagnosticSeverityInputType),
+        contains: Type.Optional(Type.String({ minLength: 1 })),
+        id: Type.Optional(
+          Type.Union([
+            Type.Integer({ minimum: 0 }),
+            Type.Array(Type.Integer({ minimum: 0 }), {
+              minItems: 1,
+              maxItems: 100,
+            }),
+          ]),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "tc_log_read",
+    label: "TwinCAT Runtime Log",
+    description:
+      "Read bounded runtime log text from a configured diagnostic source.",
+    parameters: Type.Object(
+      {
+        source: Type.Optional(Type.String({ minLength: 1 })),
+        limitBytes: Type.Optional(
+          Type.Integer({ minimum: 1_024, maximum: 1_048_576 }),
+        ),
+        tailLines: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 5_000 }),
+        ),
+        since: Type.Optional(Type.String({ minLength: 1 })),
+        severity: Type.Optional(diagnosticSeverityInputType),
+        contains: Type.Optional(Type.String({ minLength: 1 })),
       },
       { additionalProperties: false },
     ),

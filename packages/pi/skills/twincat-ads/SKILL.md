@@ -5,9 +5,10 @@ description: >-
   plc_describe_symbol, plc_read, plc_read_many, plc_list_groups,
   plc_read_group, plc_write, plc_watch, plc_wait_until, nc_state,
   nc_list_axes, nc_read_axis, nc_read_axis_many, nc_read_error, io_list_groups,
-  io_read, io_read_many, io_read_group). Use when inspecting TwinCAT PLC
-  symbols, NC axis state, IO data points, runtime state, configured groups, or
-  ADS watches over a configured ADS connection.
+  io_read, io_read_many, io_read_group, tc_state, tc_event_list,
+  tc_runtime_error_list, tc_log_read). Use when inspecting TwinCAT PLC
+  symbols, NC axis state, IO data points, runtime state, runtime diagnostics,
+  configured groups, or ADS watches over a configured ADS connection.
 ---
 
 # TwinCAT ADS Skill
@@ -22,11 +23,12 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 4. Use `plc_list_groups` and `plc_read_group` when the config defines reusable PLC symbol groups.
 5. Use `nc_state`, `nc_list_axes`, `nc_read_axis`, or `nc_read_error` when the task concerns NC axes, motion state, position, velocity, or NC errors.
 6. Use `io_list_groups`, `io_read`, `io_read_many`, or `io_read_group` when the task concerns configured IO process data, sensors, valves, safety inputs, or outputs.
-7. Use `plc_read` or `plc_read_many` before making decisions.
-8. Use `plc_wait_until` for a specific PLC state transition or condition; use `plc_watch` for ongoing PLC observation.
-9. Only use `plc_write` after checking state, symbol path, and write permissions.
-10. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
-11. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
+7. Use `tc_state`, `tc_event_list`, `tc_runtime_error_list`, or `tc_log_read` when the task concerns TwinCAT-wide runtime diagnostics rather than one PLC symbol, NC axis, or IO data point.
+8. Use `plc_read` or `plc_read_many` before making decisions.
+9. Use `plc_wait_until` for a specific PLC state transition or condition; use `plc_watch` for ongoing PLC observation.
+10. Only use `plc_write` after checking state, symbol path, and write permissions.
+11. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
+12. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
 
 ## Tool guidance
 
@@ -131,6 +133,17 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 
 - Do not invent raw IO addresses. If a needed data point is missing, explain the config entry that would be required.
 - IO reads return decoded values plus raw hex. Use raw hex when type decoding looks suspicious or when checking bit-level process data.
+
+### TwinCAT runtime diagnostics
+
+- Use `tc_state` for a compact TwinCAT-wide view across ADS services, PLC state, NC state, and diagnostic source capabilities.
+- Use `tc_event_list` for recent TwinCAT/Event Log messages with filters such as `limit`, `since`, `severity`, `contains`, and `source`.
+- Use `tc_runtime_error_list` when the task is specifically about runtime/system errors. It defaults to critical/error severities unless the caller provides another severity filter.
+- Use `tc_log_read` for bounded runtime log text from configured log sources.
+- Diagnostic sources are configured under `diagnostics.eventSources` and `diagnostics.logSources`.
+- The default local source uses the Windows `Application` Event Log filtered for TwinCAT/Beckhoff provider names when available.
+- If a diagnostic result has `available=false`, report the capability reason instead of treating it as a PLC failure.
+- Do not use these runtime diagnostic tools for XAE build output, Engineering error lists, or Visual Studio output windows; those belong to the later Engineering phase.
 
 ### Finding symbol paths
 

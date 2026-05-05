@@ -14,6 +14,10 @@ export {
   type PlcWriteMode,
   type PlcWriteModeResult,
   type PlcWriteResult,
+  type RuntimeErrorListResult,
+  type RuntimeEventListResult,
+  type RuntimeLogReadResult,
+  type TwinCatStateResult,
   type TwinCatAdsService,
   type WatchSymbolOptions,
 } from "twincat-mcp-core";

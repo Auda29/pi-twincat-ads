@@ -77,6 +77,28 @@ Direct mode additionally uses:
         "inputs": ["Input1"]
       }
     }
+  },
+  "diagnostics": {
+    "maxEvents": 50,
+    "maxLogBytes": 65536,
+    "eventSources": [
+      {
+        "id": "local-windows-application",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ],
+    "logSources": [
+      {
+        "id": "local-windows-application-log",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ]
   }
 }
 ```
@@ -115,6 +137,18 @@ IO read-only:
 - `io_read`
 - `io_read_many`
 - `io_read_group`
+
+TwinCAT runtime diagnostics:
+
+- `tc_state`
+- `tc_event_list`
+- `tc_runtime_error_list`
+- `tc_log_read`
+
+Diagnostic tools use configured sources under `diagnostics`. The defaults target
+the local Windows `Application` Event Log filtered for TwinCAT/Beckhoff entries;
+when that API is unavailable, the result reports unavailable capability metadata
+instead of failing server startup.
 
 Writes and write gates:
 

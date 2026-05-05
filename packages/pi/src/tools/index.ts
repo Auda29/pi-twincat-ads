@@ -21,6 +21,10 @@ import {
   type PlcWatchSnapshot,
   type PlcWaitUntilResult,
   type PlcWriteModeResult,
+  type RuntimeErrorListResult,
+  type RuntimeEventListResult,
+  type RuntimeLogReadResult,
+  type TwinCatStateResult,
   type TwinCatAdsRuntime,
 } from "twincat-mcp-core";
 
@@ -106,6 +110,80 @@ const ioReadGroupInputSchema = z
   .strict();
 
 const stateInputSchema = z.object({}).strict();
+
+const diagnosticSeveritySchema = z.enum([
+  "critical",
+  "error",
+  "warning",
+  "info",
+  "verbose",
+  "unknown",
+]);
+
+const diagnosticSeverityInputSchema = z.union([
+  diagnosticSeveritySchema,
+  z
+    .array(diagnosticSeveritySchema)
+    .min(1, "At least one severity is required.")
+    .max(6, "At most 6 severities are supported."),
+]);
+
+const diagnosticDateTimeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(
+    (value) => !Number.isNaN(Date.parse(value)),
+    "Date/time must be parseable.",
+  );
+
+const diagnosticSourceInputSchema = z
+  .string()
+  .trim()
+  .min(1, "Diagnostic source must not be empty.");
+
+const tcEventListInputSchema = z
+  .object({
+    source: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Event limit must be at least 1.")
+      .max(500, "Event limit must be 500 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+    id: z
+      .union([
+        z.number().int().min(0),
+        z.array(z.number().int().min(0)).min(1).max(100),
+      ])
+      .optional(),
+  })
+  .strict();
+
+const tcLogReadInputSchema = z
+  .object({
+    source: diagnosticSourceInputSchema.optional(),
+    limitBytes: z
+      .number()
+      .int()
+      .min(1_024, "Log byte limit must be at least 1024 bytes.")
+      .max(1_048_576, "Log byte limit must be 1048576 bytes or lower.")
+      .optional(),
+    tailLines: z
+      .number()
+      .int()
+      .min(1, "Tail line limit must be at least 1.")
+      .max(5_000, "Tail line limit must be 5000 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+  })
+  .strict();
 
 const writeInputSchema = z
   .object({
@@ -294,6 +372,10 @@ export interface IoReadManyToolOutput extends IoReadManyResult {}
 export interface IoReadGroupToolOutput {
   readonly group: IoReadGroupResult;
 }
+export interface TcStateToolOutput extends TwinCatStateResult {}
+export interface TcEventListToolOutput extends RuntimeEventListResult {}
+export interface TcRuntimeErrorListToolOutput extends RuntimeErrorListResult {}
+export interface TcLogReadToolOutput extends RuntimeLogReadResult {}
 export interface PlcWriteToolOutput {
   readonly result: {
     readonly name: string;
@@ -412,6 +494,13 @@ export function createToolDefinitions(): Array<
   | ToolDefinition<z.infer<typeof stateInputSchema>, NcListAxesToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, IoListGroupsToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcListGroupsToolOutput>
+  | ToolDefinition<z.infer<typeof stateInputSchema>, TcStateToolOutput>
+  | ToolDefinition<z.infer<typeof tcEventListInputSchema>, TcEventListToolOutput>
+  | ToolDefinition<
+      z.infer<typeof tcEventListInputSchema>,
+      TcRuntimeErrorListToolOutput
+    >
+  | ToolDefinition<z.infer<typeof tcLogReadInputSchema>, TcLogReadToolOutput>
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcStateToolOutput>
   | ToolDefinition<z.infer<typeof writeInputSchema>, PlcWriteToolOutput>
   | ToolDefinition<
@@ -568,6 +657,35 @@ export function createToolDefinitions(): Array<
       }),
     }),
     createToolDefinition({
+      name: "tc_state",
+      description:
+        "Inspect compact TwinCAT-wide ADS, PLC, NC, and diagnostics capability state.",
+      inputSchema: stateInputSchema,
+      handler: async (_input, context) => context.runtime.tcState(),
+    }),
+    createToolDefinition({
+      name: "tc_event_list",
+      description:
+        "List recent TwinCAT runtime events from a configured diagnostic source.",
+      inputSchema: tcEventListInputSchema,
+      handler: async (input, context) => context.runtime.tcEventList(input),
+    }),
+    createToolDefinition({
+      name: "tc_runtime_error_list",
+      description:
+        "List recent critical/error TwinCAT runtime events from a configured diagnostic source.",
+      inputSchema: tcEventListInputSchema,
+      handler: async (input, context) =>
+        context.runtime.tcRuntimeErrorList(input),
+    }),
+    createToolDefinition({
+      name: "tc_log_read",
+      description:
+        "Read bounded runtime log text from a configured diagnostic source.",
+      inputSchema: tcLogReadInputSchema,
+      handler: async (input, context) => context.runtime.tcLogRead(input),
+    }),
+    createToolDefinition({
       name: "plc_watch",
       description:
         "Register or reuse a PLC notification watch for a symbol.",
@@ -704,6 +822,8 @@ export {
   ioReadInputSchema,
   ioReadManyInputSchema,
   ioReadGroupInputSchema,
+  tcEventListInputSchema,
+  tcLogReadInputSchema,
   stateInputSchema,
   writeInputSchema,
   setWriteModeInputSchema,

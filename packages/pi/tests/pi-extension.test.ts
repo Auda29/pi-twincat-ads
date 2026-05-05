@@ -27,6 +27,10 @@ describe("Pi host extension", () => {
         "io_read",
         "io_read_many",
         "io_read_group",
+        "tc_state",
+        "tc_event_list",
+        "tc_runtime_error_list",
+        "tc_log_read",
       ]),
     );
   });

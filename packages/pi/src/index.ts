@@ -112,6 +112,10 @@ export {
   type PlcWriteAccessResult,
   type PlcWriteMode,
   type PlcWriteModeResult,
+  type RuntimeErrorListResult,
+  type RuntimeEventListResult,
+  type RuntimeLogReadResult,
+  type TwinCatStateResult,
 } from "./ads/index.js";
 
 export {

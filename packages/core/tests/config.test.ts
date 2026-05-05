@@ -18,6 +18,16 @@ describe("core config contract", () => {
     expect(config.services.plc.targetAdsPort).toBe(851);
     expect(config.services.nc.targetAdsPort).toBe(500);
     expect(config.services.io.targetAdsPort).toBe(300);
+    expect(config.diagnostics.eventSources[0]).toMatchObject({
+      id: "local-windows-application",
+      kind: "windowsEventLog",
+      logName: "Application",
+    });
+    expect(config.diagnostics.logSources[0]).toMatchObject({
+      id: "local-windows-application-log",
+      kind: "windowsEventLog",
+      logName: "Application",
+    });
     expect(config.readOnly).toBe(true);
   });
 
@@ -56,6 +66,27 @@ describe("core config contract", () => {
           },
         },
       },
+      diagnostics: {
+        maxEvents: 20,
+        maxLogBytes: 4096,
+        eventSources: [
+          {
+            id: "events",
+            kind: "windowsEventLog",
+            logName: "Application",
+            providerNames: ["TcSysSrv"],
+            commandTimeoutMs: 2000,
+          },
+        ],
+        logSources: [
+          {
+            id: "runtime-file",
+            kind: "file",
+            path: "C:/TwinCAT/3.1/Boot/runtime.log",
+            encoding: "utf8",
+          },
+        ],
+      },
     });
 
     expect(config.targetAdsPort).toBe(852);
@@ -88,6 +119,15 @@ describe("core config contract", () => {
       groups: {
         inputs: ["Input1"],
       },
+    });
+    expect(config.diagnostics.maxEvents).toBe(20);
+    expect(config.diagnostics.eventSources[0]).toMatchObject({
+      id: "events",
+      providerNames: ["TcSysSrv"],
+    });
+    expect(config.diagnostics.logSources[0]).toMatchObject({
+      id: "runtime-file",
+      kind: "file",
     });
   });
 

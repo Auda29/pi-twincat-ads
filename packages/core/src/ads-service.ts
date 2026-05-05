@@ -24,14 +24,26 @@ import {
   DEFAULT_MAX_WAIT_UNTIL_MS,
   DEFAULT_NC_ADS_PORT,
   isWriteAllowed,
+  normalizeRuntimeDiagnosticsConfig,
   type ExtensionRuntimeConfig,
   type IoDataPointConfig,
   type NcAxisConfig,
   type TwinCatAdsServiceName,
 } from "./config.js";
+import {
+  RuntimeDiagnostics,
+  type RuntimeDiagnosticsCapabilities,
+  type RuntimeDiagnosticsDependencies,
+  type RuntimeErrorListResult,
+  type RuntimeEventListResult,
+  type RuntimeEventQuery,
+  type RuntimeLogQuery,
+  type RuntimeLogReadResult,
+} from "./diagnostics.js";
 
 export interface AdsServiceDependencies {
   readonly logger?: Pick<Console, "debug" | "error" | "info" | "warn">;
+  readonly diagnostics?: RuntimeDiagnosticsDependencies;
 }
 
 export type AdsConnectionState =
@@ -181,6 +193,21 @@ export interface NcStateResult {
   readonly ncRuntimeStatus: AdsStateSummary;
   readonly deviceInfo: AdsClientDeviceInfo;
   readonly axes: NcAxisSummary[];
+}
+
+export interface TwinCatStateComponent<TData> {
+  readonly available: boolean;
+  readonly data?: TData;
+  readonly error?: string;
+}
+
+export interface TwinCatStateResult {
+  readonly timestamp: string;
+  readonly adsState: AdsConnectionState;
+  readonly services: AdsNamedServiceConnectionSummary[];
+  readonly plc: TwinCatStateComponent<PlcStateResult>;
+  readonly nc: TwinCatStateComponent<NcStateResult>;
+  readonly diagnostics: RuntimeDiagnosticsCapabilities;
 }
 
 export interface NcAxisOnlineState {
@@ -497,6 +524,10 @@ export interface TwinCatAdsService {
   ioRead(name: string): Promise<IoReadResult>;
   ioReadMany(names: readonly string[]): Promise<IoReadManyResult>;
   ioReadGroup(group: string): Promise<IoReadGroupResult>;
+  tcState(): Promise<TwinCatStateResult>;
+  tcEventList(input?: RuntimeEventQuery): Promise<RuntimeEventListResult>;
+  tcRuntimeErrorList(input?: RuntimeEventQuery): Promise<RuntimeErrorListResult>;
+  tcLogRead(input?: RuntimeLogQuery): Promise<RuntimeLogReadResult>;
   writeSymbol<T = unknown>(
     name: string,
     value: T,
@@ -526,8 +557,9 @@ interface PlcWatchEntry {
 
 type AdsServiceRuntimeConfigInput = Omit<
   ExtensionRuntimeConfig,
-  "maxWaitUntilMs" | "services"
+  "diagnostics" | "maxWaitUntilMs" | "services"
 > & {
+  readonly diagnostics?: ExtensionRuntimeConfig["diagnostics"];
   readonly maxWaitUntilMs?: number;
   readonly services?: Partial<ExtensionRuntimeConfig["services"]>;
 };
@@ -540,6 +572,7 @@ function completeRuntimeConfig(
 
   return {
     ...config,
+    diagnostics: normalizeRuntimeDiagnosticsConfig(config.diagnostics),
     targetAdsPort: plcTargetAdsPort,
     maxWaitUntilMs: config.maxWaitUntilMs ?? DEFAULT_MAX_WAIT_UNTIL_MS,
     services: {
@@ -882,12 +915,17 @@ export class AdsService {
   #symbolsLoaded = false;
   #writeMode: PlcWriteMode = "read-only";
   private readonly config: ExtensionRuntimeConfig;
+  private readonly runtimeDiagnostics: RuntimeDiagnostics;
 
   constructor(
     config: AdsServiceRuntimeConfigInput,
     private readonly dependencies: AdsServiceDependencies = {},
   ) {
     this.config = completeRuntimeConfig(config);
+    this.runtimeDiagnostics = new RuntimeDiagnostics(
+      this.config.diagnostics,
+      dependencies.diagnostics,
+    );
     this.#serviceClients = createServiceClients(this.config);
     this.#client = this.#getExistingServiceClient("plc");
     this.#bindClientEvents();
@@ -1298,6 +1336,38 @@ export class AdsService {
       results: result.results,
       count: result.count,
     };
+  }
+
+  async tcState(): Promise<TwinCatStateResult> {
+    const [plc, nc] = await Promise.all([
+      this.#captureStateComponent(() => this.readState()),
+      this.#captureStateComponent(() => this.ncState()),
+    ]);
+
+    return {
+      timestamp: new Date().toISOString(),
+      adsState: this.#state,
+      services: this.listServices(),
+      plc,
+      nc,
+      diagnostics: this.runtimeDiagnostics.listCapabilities(),
+    };
+  }
+
+  async tcEventList(
+    input: RuntimeEventQuery = {},
+  ): Promise<RuntimeEventListResult> {
+    return this.runtimeDiagnostics.listEvents(input);
+  }
+
+  async tcRuntimeErrorList(
+    input: RuntimeEventQuery = {},
+  ): Promise<RuntimeErrorListResult> {
+    return this.runtimeDiagnostics.listRuntimeErrors(input);
+  }
+
+  async tcLogRead(input: RuntimeLogQuery = {}): Promise<RuntimeLogReadResult> {
+    return this.runtimeDiagnostics.readLog(input);
   }
 
   async readValue<T = unknown>(name: string): Promise<PlcReadResult<T>> {
@@ -1868,6 +1938,22 @@ export class AdsService {
 
   #serviceState(client: Client): AdsConnectionState {
     return client.connection.connected ? "connected" : "disconnected";
+  }
+
+  async #captureStateComponent<TData>(
+    readComponent: () => Promise<TData>,
+  ): Promise<TwinCatStateComponent<TData>> {
+    try {
+      return {
+        available: true,
+        data: await readComponent(),
+      };
+    } catch (error) {
+      return {
+        available: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   #toNcAxisSummary(axis: NcAxisConfig): NcAxisSummary {

@@ -181,6 +181,94 @@ function createServiceStub() {
       calls.push(`ioReadGroup:${group}`);
       return { group, dataPoints: [], results: [], count: 0 };
     },
+    tcState: async () => {
+      calls.push("tcState");
+      return {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        adsState: "connected",
+        services: [],
+        plc: {
+          available: true,
+          data: {
+            connection: { connected: true },
+            adsState: "connected",
+            writeMode: "read-only",
+            watchCount: 0,
+            writePolicy: {
+              configReadOnly: true,
+              runtimeWriteEnabled: false,
+              allowlistCount: 0,
+            },
+            plcRuntimeState: { adsState: 5, deviceState: 0 },
+            plcRuntimeStatus: {
+              adsState: 5,
+              adsStateName: "Run",
+              deviceState: 0,
+              isRun: true,
+              isStop: false,
+            },
+            tcSystemState: { adsState: 5, deviceState: 0 },
+            tcSystemStatus: {
+              adsState: 5,
+              adsStateName: "Run",
+              deviceState: 0,
+              isRun: true,
+              isStop: false,
+            },
+            tcSystemExtendedState: {
+              adsState: 5,
+              deviceState: 0,
+              restartIndex: 1,
+              version: 3,
+              revision: 1,
+              build: 4026,
+              platform: 1,
+              osType: 1,
+            },
+            deviceInfo: {},
+          },
+        },
+        nc: { available: false, error: "NC unavailable" },
+        diagnostics: { eventSources: [], logSources: [] },
+      };
+    },
+    tcEventList: async () => {
+      calls.push("tcEventList");
+      return {
+        source: "events",
+        available: true,
+        capability: { id: "events", kind: "windowsEventLog", available: true },
+        events: [],
+        count: 0,
+        truncated: false,
+        query: { limit: 50 },
+      };
+    },
+    tcRuntimeErrorList: async () => {
+      calls.push("tcRuntimeErrorList");
+      return {
+        source: "events",
+        available: true,
+        capability: { id: "events", kind: "windowsEventLog", available: true },
+        events: [],
+        errors: [],
+        count: 0,
+        truncated: false,
+        query: { limit: 50 },
+      };
+    },
+    tcLogRead: async () => {
+      calls.push("tcLogRead");
+      return {
+        source: "logs",
+        available: true,
+        capability: { id: "logs", kind: "file", available: true },
+        text: "",
+        bytesRead: 0,
+        truncated: false,
+        query: { limitBytes: 1024 },
+      };
+    },
     writeSymbol: async (name, value) => {
       calls.push(`writeSymbol:${name}`);
       return {
@@ -319,6 +407,10 @@ describe("core runtime contract", () => {
     await runtime.ioRead({ name: "Input1" });
     await runtime.ioReadMany({ names: ["Input1", "Output1"] });
     await runtime.ioReadGroup({ group: "inputs" });
+    await runtime.tcState();
+    await runtime.tcEventList({ limit: 5 });
+    await runtime.tcRuntimeErrorList({ limit: 5 });
+    await runtime.tcLogRead({ limitBytes: 1024 });
     await runtime.writeSymbol({ name: "MAIN.value", value: 7 });
     await runtime.watchSymbol({ name: "MAIN.value" });
     await runtime.waitUntil({
@@ -348,6 +440,10 @@ describe("core runtime contract", () => {
       "ioRead:Input1",
       "ioReadMany:Input1,Output1",
       "ioReadGroup:inputs",
+      "tcState",
+      "tcEventList",
+      "tcRuntimeErrorList",
+      "tcLogRead",
       "writeSymbol:MAIN.value",
       "watchSymbol:MAIN.value",
       "waitUntil:100",

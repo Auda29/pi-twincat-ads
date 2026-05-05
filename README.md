@@ -62,6 +62,28 @@ the usual choice when the host already has a working ADS router:
       "dataPoints": [],
       "groups": {}
     }
+  },
+  "diagnostics": {
+    "maxEvents": 50,
+    "maxLogBytes": 65536,
+    "eventSources": [
+      {
+        "id": "local-windows-application",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ],
+    "logSources": [
+      {
+        "id": "local-windows-application-log",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ]
   }
 }
 ```
@@ -128,6 +150,9 @@ Common fields:
 - `services.io.targetAdsPort`: IO ADS port, default `300`
 - `services.io.dataPoints`: named IO raw ADS addresses with `indexGroup`, `indexOffset`, and type
 - `services.io.groups`: named IO data point groups for `io_read_group`
+- `diagnostics.eventSources`: sources for `tc_event_list` and `tc_runtime_error_list`
+- `diagnostics.logSources`: sources for `tc_log_read`; supports local Windows Event Log and configured files
+- `diagnostics.maxEvents` / `diagnostics.maxLogBytes`: caps for diagnostic output
 
 ## Safety Model
 
@@ -175,9 +200,10 @@ twincat-mcp --config ./plc.config.json
 Config can also be supplied with `TWINCAT_ADS_CONFIG` or environment variables
 such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP exposes PLC reads, writes,
 symbol description, configured groups, watches, wait-until operations, NC
-read-only axis diagnostics, and IO read-only data point/group reads as tools.
-Watches are modeled as normal tools, not as MCP resources or
-subscriptions yet.
+read-only axis diagnostics, IO read-only data point/group reads, and
+TwinCAT-wide runtime diagnostics (`tc_state`, `tc_event_list`,
+`tc_runtime_error_list`, `tc_log_read`) as tools. Watches are modeled as normal
+tools, not as MCP resources or subscriptions yet.
 
 See `packages/mcp/README.md` for tool names and configuration details.
 

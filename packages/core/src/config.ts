@@ -9,6 +9,19 @@ export const DEFAULT_LOCAL_ADS_PORT = 32_000 as const;
 export const DEFAULT_NOTIFICATION_CYCLE_TIME_MS = 250 as const;
 export const DEFAULT_MAX_NOTIFICATIONS = 128 as const;
 export const DEFAULT_MAX_WAIT_UNTIL_MS = 600_000 as const;
+export const DEFAULT_RUNTIME_EVENT_LIMIT = 50 as const;
+export const DEFAULT_RUNTIME_LOG_LIMIT_BYTES = 65_536 as const;
+export const DEFAULT_DIAGNOSTIC_COMMAND_TIMEOUT_MS = 8_000 as const;
+export const DEFAULT_TWINCAT_EVENT_LOG_NAME = "Application" as const;
+export const DEFAULT_TWINCAT_EVENT_PROVIDER_FILTERS = [
+  "TwinCAT",
+  "Beckhoff",
+  "TcSysSrv",
+  "TcSysUi",
+  "TcIoSrv",
+  "TcNc",
+  "TcEvent",
+] as const;
 
 const amsNetIdSegmentSchema = z.coerce
   .number()
@@ -65,6 +78,25 @@ const namedConfigEntrySchema = z
   .trim()
   .min(1, "Configured names must not be empty.")
   .transform((value) => value.trim());
+
+const diagnosticSourceIdSchema = z
+  .string()
+  .trim()
+  .min(1, "Diagnostic source id must not be empty.")
+  .transform((value) => value.trim());
+
+const diagnosticProviderFilterSchema = z
+  .string()
+  .trim()
+  .min(1, "Diagnostic provider filter must not be empty.")
+  .transform((value) => value.trim());
+
+const diagnosticCommandTimeoutSchema = z
+  .number()
+  .int()
+  .min(1_000, "Diagnostic command timeout must be at least 1000 ms.")
+  .max(60_000, "Diagnostic command timeout must be 60000 ms or lower.")
+  .default(DEFAULT_DIAGNOSTIC_COMMAND_TIMEOUT_MS);
 
 const plcSymbolGroupsSchema = z
   .record(
@@ -157,6 +189,89 @@ const adsServicesConfigSchema = z
   .strict()
   .default({});
 
+const windowsEventLogDiagnosticSourceSchema = z
+  .object({
+    id: diagnosticSourceIdSchema,
+    kind: z.literal("windowsEventLog"),
+    logName: z
+      .string()
+      .trim()
+      .min(1, "Windows Event Log name must not be empty.")
+      .default(DEFAULT_TWINCAT_EVENT_LOG_NAME),
+    providerNames: z
+      .array(diagnosticProviderFilterSchema)
+      .default([...DEFAULT_TWINCAT_EVENT_PROVIDER_FILTERS]),
+    commandTimeoutMs: diagnosticCommandTimeoutSchema,
+    description: z.string().trim().optional(),
+  })
+  .strict();
+
+const fileDiagnosticLogSourceSchema = z
+  .object({
+    id: diagnosticSourceIdSchema,
+    kind: z.literal("file"),
+    path: z
+      .string()
+      .trim()
+      .min(1, "Diagnostic log file path must not be empty.")
+      .transform((value) => value.trim()),
+    encoding: z.enum(["utf8", "utf16le", "latin1"]).default("utf8"),
+    description: z.string().trim().optional(),
+  })
+  .strict();
+
+const defaultWindowsEventSourceConfig = {
+  id: "local-windows-application",
+  kind: "windowsEventLog" as const,
+  logName: DEFAULT_TWINCAT_EVENT_LOG_NAME,
+  providerNames: [...DEFAULT_TWINCAT_EVENT_PROVIDER_FILTERS],
+  commandTimeoutMs: DEFAULT_DIAGNOSTIC_COMMAND_TIMEOUT_MS,
+  description:
+    "Local Windows Application log filtered for TwinCAT and Beckhoff providers.",
+};
+
+const defaultWindowsLogSourceConfig = {
+  ...defaultWindowsEventSourceConfig,
+  id: "local-windows-application-log",
+  description:
+    "Local Windows Application log rendered as bounded runtime log text.",
+};
+
+const runtimeEventSourceConfigSchema = windowsEventLogDiagnosticSourceSchema;
+const runtimeLogSourceConfigSchema = z.discriminatedUnion("kind", [
+  windowsEventLogDiagnosticSourceSchema,
+  fileDiagnosticLogSourceSchema,
+]);
+
+export const runtimeDiagnosticsConfigSchema = z
+  .object({
+    maxEvents: z
+      .number()
+      .int()
+      .min(1, "Diagnostic event limit must be at least 1.")
+      .max(500, "Diagnostic event limit must be 500 or lower.")
+      .default(DEFAULT_RUNTIME_EVENT_LIMIT),
+    maxLogBytes: z
+      .number()
+      .int()
+      .min(1_024, "Diagnostic log byte limit must be at least 1024 bytes.")
+      .max(1_048_576, "Diagnostic log byte limit must be 1048576 bytes or lower.")
+      .default(DEFAULT_RUNTIME_LOG_LIMIT_BYTES),
+    eventSources: z
+      .array(runtimeEventSourceConfigSchema)
+      .default([defaultWindowsEventSourceConfig]),
+    logSources: z
+      .array(runtimeLogSourceConfigSchema)
+      .default([defaultWindowsLogSourceConfig]),
+  })
+  .strict()
+  .default({
+    maxEvents: DEFAULT_RUNTIME_EVENT_LIMIT,
+    maxLogBytes: DEFAULT_RUNTIME_LOG_LIMIT_BYTES,
+    eventSources: [defaultWindowsEventSourceConfig],
+    logSources: [defaultWindowsLogSourceConfig],
+  });
+
 const commonConfigSchema = z.object({
   targetAmsNetId: amsNetIdSchema,
   targetAdsPort: adsPortSchema.default(DEFAULT_PLC_ADS_PORT),
@@ -182,6 +297,7 @@ const commonConfigSchema = z.object({
     .max(3_600_000, "Max wait-until timeout must be 3600000 ms or lower.")
     .default(DEFAULT_MAX_WAIT_UNTIL_MS),
   services: adsServicesConfigSchema,
+  diagnostics: runtimeDiagnosticsConfigSchema,
 });
 
 export const adsRouterConnectionConfigSchema = commonConfigSchema.extend({
@@ -249,6 +365,31 @@ export interface TwinCatAdsServiceConfigs {
   readonly nc: NcAdsNamedServiceConfig;
   readonly io: IoAdsNamedServiceConfig;
 }
+export interface WindowsEventLogDiagnosticSourceConfig {
+  readonly id: string;
+  readonly kind: "windowsEventLog";
+  readonly logName: string;
+  readonly providerNames: string[];
+  readonly commandTimeoutMs: number;
+  readonly description?: string | undefined;
+}
+export interface FileDiagnosticLogSourceConfig {
+  readonly id: string;
+  readonly kind: "file";
+  readonly path: string;
+  readonly encoding: "utf8" | "utf16le" | "latin1";
+  readonly description?: string | undefined;
+}
+export type RuntimeEventSourceConfig = WindowsEventLogDiagnosticSourceConfig;
+export type RuntimeLogSourceConfig =
+  | WindowsEventLogDiagnosticSourceConfig
+  | FileDiagnosticLogSourceConfig;
+export interface RuntimeDiagnosticsConfig {
+  readonly maxEvents: number;
+  readonly maxLogBytes: number;
+  readonly eventSources: RuntimeEventSourceConfig[];
+  readonly logSources: RuntimeLogSourceConfig[];
+}
 
 export type AdsConnectionMode = z.infer<
   typeof twinCatAdsConfigSchema
@@ -276,6 +417,9 @@ export type TwinCatAdsRouterConfigInput = Omit<
 export type TwinCatAdsConfigInput =
   | TwinCatAdsRouterConfigInput
   | z.input<typeof adsDirectConnectionConfigSchema>;
+export type RuntimeDiagnosticsConfigInput = z.input<
+  typeof runtimeDiagnosticsConfigSchema
+>;
 export type ExtensionRuntimeConfig = TwinCatAdsRuntimeConfig;
 export type ExtensionConfigInput = TwinCatAdsConfigInput;
 export type WritePolicy = Pick<
@@ -327,6 +471,12 @@ export function normalizeTwinCatAdsConfig(
     targetAdsPort: services.plc.targetAdsPort,
     services,
   };
+}
+
+export function normalizeRuntimeDiagnosticsConfig(
+  input?: RuntimeDiagnosticsConfigInput,
+): RuntimeDiagnosticsConfig {
+  return runtimeDiagnosticsConfigSchema.parse(input);
 }
 
 export function normalizeExtensionConfig(

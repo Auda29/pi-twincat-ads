@@ -135,7 +135,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - `io_read_group` implementieren, um eine konfigurierte IO-Gruppe zu lesen.
 - `io_list_groups` implementieren, um verfuegbare IO-Gruppen und Datenpunkte sichtbar zu machen.
 
-### 15. TwinCAT-weite Diagnose-Tools fuer Fehler, Events und Output ergaenzen `[Open]`
+### 15. TwinCAT-weite Diagnose-Tools fuer Fehler, Events und Output ergaenzen `[Done]`
 
 - Backends fuer Runtime-Events und Runtime-Logs evaluieren, bevor die Tool-API festgezurrt wird. `[Done: docs/runtime-events-logs-backends.md]`
 - Engineering-Fehlerlisten, Build-Ausgaben und XAE-Output-Fenster nicht in Phase 2 implementieren; diese gehoeren in Phase 3.
@@ -144,6 +144,16 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
 - `tc_runtime_error_list` implementieren, um aktive Runtime-/Systemfehler zu lesen, sofern eine Quelle konfiguriert ist.
 - `tc_log_read` implementieren, um relevante Runtime- oder Event-Logtexte gezielt zu lesen.
 - Quellen fuer Events und Runtime-Logs konfigurierbar halten.
+- Fuer Event- und Log-Quellen eine Default-Config vorsehen, die auf einem lokalen
+  Windows-/TwinCAT-System ohne Zusatzkonfiguration nutzbar ist, soweit die
+  benoetigten lokalen APIs verfuegbar sind.
+- Lokale Default-Quellen analog zu ADS-Defaults behandeln: sinnvolle
+  Startwerte automatisch setzen, z. B. Windows `Application` Event Log mit
+  TwinCAT-/Beckhoff-Quellen ueber `Get-TcEvent` oder `Get-WinEvent`, und diese
+  Defaults in der Config explizit ueberschreibbar machen.
+- Wenn lokale Default-Quellen nicht verfuegbar sind, z. B. kein Windows, kein
+  Beckhoff-PowerShell-Modul oder keine Berechtigung, soll die Runtime eine klare
+  Capability-/Unavailable-Antwort liefern statt beim Start hart zu scheitern.
 - Filter wie `limit`, `since`, `severity` und Textsuche vorsehen, damit die Tools keine grossen unkontrollierten Dumps erzeugen.
 
 ### 16. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Open]`

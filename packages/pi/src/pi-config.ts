@@ -57,6 +57,44 @@ export function createDefaultPiConfig(): ExtensionConfigInput {
         targetAdsPort: 300,
       },
     },
+    diagnostics: {
+      maxEvents: 50,
+      maxLogBytes: 65_536,
+      eventSources: [
+        {
+          id: "local-windows-application",
+          kind: "windowsEventLog",
+          logName: "Application",
+          providerNames: [
+            "TwinCAT",
+            "Beckhoff",
+            "TcSysSrv",
+            "TcSysUi",
+            "TcIoSrv",
+            "TcNc",
+            "TcEvent",
+          ],
+          commandTimeoutMs: 8_000,
+        },
+      ],
+      logSources: [
+        {
+          id: "local-windows-application-log",
+          kind: "windowsEventLog",
+          logName: "Application",
+          providerNames: [
+            "TwinCAT",
+            "Beckhoff",
+            "TcSysSrv",
+            "TcSysUi",
+            "TcIoSrv",
+            "TcNc",
+            "TcEvent",
+          ],
+          commandTimeoutMs: 8_000,
+        },
+      ],
+    },
   };
 }
 

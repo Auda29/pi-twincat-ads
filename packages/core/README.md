@@ -68,6 +68,10 @@ The runtime exposes transport-free PLC operations:
 - `ioRead`
 - `ioReadMany`
 - `ioReadGroup`
+- `tcState`
+- `tcEventList`
+- `tcRuntimeErrorList`
+- `tcLogRead`
 - `writeSymbol`
 - `watchSymbol`
 - `waitUntil`
@@ -112,6 +116,28 @@ Router mode:
       "dataPoints": [],
       "groups": {}
     }
+  },
+  "diagnostics": {
+    "maxEvents": 50,
+    "maxLogBytes": 65536,
+    "eventSources": [
+      {
+        "id": "local-windows-application",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ],
+    "logSources": [
+      {
+        "id": "local-windows-application-log",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ]
   }
 }
 ```
@@ -172,6 +198,13 @@ index group.
 has `name`, `indexGroup`, `indexOffset`, `type`, and optional `size` and
 `description`. `services.io.groups` maps group names to configured data point
 names.
+
+`diagnostics.eventSources` and `diagnostics.logSources` configure bounded
+TwinCAT-wide runtime diagnostics. By default the runtime registers local
+Windows `Application` Event Log sources filtered for TwinCAT/Beckhoff provider
+names. On non-Windows hosts, missing PowerShell/Event Log APIs, or insufficient
+permissions, diagnostic tools return an unavailable capability result instead
+of failing startup.
 
 `readState` returns ADS connection state, write policy, watch count, raw ADS
 state objects, and readable PLC/TwinCAT state summaries such as `Run` or

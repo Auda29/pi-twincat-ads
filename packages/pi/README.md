@@ -53,6 +53,28 @@ Default local config:
       "dataPoints": [],
       "groups": {}
     }
+  },
+  "diagnostics": {
+    "maxEvents": 50,
+    "maxLogBytes": 65536,
+    "eventSources": [
+      {
+        "id": "local-windows-application",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ],
+    "logSources": [
+      {
+        "id": "local-windows-application-log",
+        "kind": "windowsEventLog",
+        "logName": "Application",
+        "providerNames": ["TwinCAT", "Beckhoff", "TcSysSrv", "TcSysUi", "TcIoSrv", "TcNc", "TcEvent"],
+        "commandTimeoutMs": 8000
+      }
+    ]
   }
 }
 ```
@@ -98,6 +120,17 @@ IO read-only:
 
 Configure IO data points under `services.io.dataPoints` and group them under
 `services.io.groups`.
+
+TwinCAT runtime diagnostics:
+
+- `tc_state`
+- `tc_event_list`
+- `tc_runtime_error_list`
+- `tc_log_read`
+
+Configure diagnostic sources under `diagnostics`. The default local source reads
+the Windows `Application` Event Log for TwinCAT/Beckhoff entries when available;
+otherwise tools return unavailable capability details.
 
 Write control:
 

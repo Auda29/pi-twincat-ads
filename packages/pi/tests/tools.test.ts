@@ -204,6 +204,154 @@ function createRuntimeStub() {
       ],
       count: 1,
     }),
+    tcState: async () => ({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      adsState: "connected" as const,
+      services: [],
+      plc: {
+        available: true,
+        data: {
+          connection: { connected: true },
+          adsState: "connected" as const,
+          writeMode: "read-only" as const,
+          watchCount: 0,
+          writePolicy: {
+            configReadOnly: true,
+            runtimeWriteEnabled: false,
+            allowlistCount: 0,
+          },
+          plcRuntimeState: { adsState: 5, deviceState: 0 },
+          plcRuntimeStatus: {
+            adsState: 5,
+            adsStateName: "Run",
+            deviceState: 0,
+            isRun: true,
+            isStop: false,
+          },
+          tcSystemState: { adsState: 5, deviceState: 0 },
+          tcSystemStatus: {
+            adsState: 5,
+            adsStateName: "Run",
+            deviceState: 0,
+            isRun: true,
+            isStop: false,
+          },
+          tcSystemExtendedState: {
+            adsState: 5,
+            deviceState: 0,
+            restartIndex: 1,
+            version: 3,
+            revision: 1,
+            build: 4026,
+            platform: 1,
+            osType: 1,
+          },
+          deviceInfo: {
+            majorVersion: 1,
+            minorVersion: 0,
+            versionBuild: 1,
+            deviceName: "Mock PLC",
+          },
+        },
+      },
+      nc: {
+        available: true,
+        data: {
+          connection: { connected: true },
+          adsState: "connected" as const,
+          ncRuntimeState: { adsState: 5, deviceState: 0 },
+          ncRuntimeStatus: {
+            adsState: 5,
+            adsStateName: "Run",
+            deviceState: 0,
+            isRun: true,
+            isStop: false,
+          },
+          deviceInfo: { deviceName: "Mock NC" },
+          axes: [{ name: "X", id: 1, targetAdsPort: 500 }],
+        },
+      },
+      diagnostics: {
+        eventSources: [
+          {
+            id: "events",
+            kind: "windowsEventLog",
+            available: true,
+          },
+        ],
+        logSources: [
+          {
+            id: "logs",
+            kind: "file",
+            available: true,
+          },
+        ],
+      },
+    }),
+    tcEventList: async () => ({
+      source: "events",
+      available: true,
+      capability: {
+        id: "events",
+        kind: "windowsEventLog",
+        available: true,
+      },
+      events: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "warning" as const,
+          id: 100,
+          message: "Runtime warning",
+        },
+      ],
+      count: 1,
+      truncated: false,
+      query: { limit: 50 },
+    }),
+    tcRuntimeErrorList: async () => ({
+      source: "events",
+      available: true,
+      capability: {
+        id: "events",
+        kind: "windowsEventLog",
+        available: true,
+      },
+      events: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "error" as const,
+          id: 101,
+          message: "Runtime error",
+        },
+      ],
+      errors: [
+        {
+          timestamp: "2026-01-01T00:00:00.000Z",
+          source: "TcSysSrv",
+          severity: "error" as const,
+          id: 101,
+          message: "Runtime error",
+        },
+      ],
+      count: 1,
+      truncated: false,
+      query: { limit: 50, severity: ["critical", "error"] },
+    }),
+    tcLogRead: async () => ({
+      source: "logs",
+      available: true,
+      capability: {
+        id: "logs",
+        kind: "file",
+        available: true,
+      },
+      text: "Runtime log",
+      bytesRead: 11,
+      truncated: false,
+      query: { limitBytes: 1024 },
+    }),
     readState: async () => ({
       connection: { connected: true },
       adsState: "connected" as const,
@@ -399,6 +547,56 @@ describe("tools", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.group.results[0]?.value).toBe(true);
+    }
+  });
+
+  it("dispatches TwinCAT-wide diagnostic tools", async () => {
+    const tools = createToolDefinitions();
+    const stateTool = tools.find((entry) => entry.name === "tc_state");
+    const eventsTool = tools.find((entry) => entry.name === "tc_event_list");
+    const errorsTool = tools.find(
+      (entry) => entry.name === "tc_runtime_error_list",
+    );
+    const logTool = tools.find((entry) => entry.name === "tc_log_read");
+    expect(stateTool).toBeDefined();
+    expect(eventsTool).toBeDefined();
+    expect(errorsTool).toBeDefined();
+    expect(logTool).toBeDefined();
+
+    const state = await stateTool!.execute(
+      {},
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(state.ok).toBe(true);
+    if (state.ok) {
+      expect(state.data.diagnostics.eventSources[0]?.id).toBe("events");
+    }
+
+    const events = await eventsTool!.execute(
+      { severity: "warning" },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(events.ok).toBe(true);
+    if (events.ok) {
+      expect(events.data.events[0]?.severity).toBe("warning");
+    }
+
+    const errors = await errorsTool!.execute(
+      {},
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(errors.ok).toBe(true);
+    if (errors.ok) {
+      expect(errors.data.errors[0]?.severity).toBe("error");
+    }
+
+    const log = await logTool!.execute(
+      { limitBytes: 1024 },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(log.ok).toBe(true);
+    if (log.ok) {
+      expect(log.data.text).toBe("Runtime log");
     }
   });
 

@@ -24,8 +24,16 @@ import type {
   PlcWriteMode,
   PlcWriteModeResult,
   PlcWriteResult,
+  TwinCatStateResult,
   TwinCatAdsService,
 } from "./ads-service.js";
+import type {
+  RuntimeErrorListResult,
+  RuntimeEventListResult,
+  RuntimeEventQuery,
+  RuntimeLogQuery,
+  RuntimeLogReadResult,
+} from "./diagnostics.js";
 
 export interface ReadSymbolInput {
   readonly name: string;
@@ -62,6 +70,12 @@ export interface IoReadManyInput {
 export interface IoReadGroupInput {
   readonly group: string;
 }
+
+export interface TcEventListInput extends RuntimeEventQuery {}
+
+export interface TcRuntimeErrorListInput extends RuntimeEventQuery {}
+
+export interface TcLogReadInput extends RuntimeLogQuery {}
 
 export interface WriteSymbolInput<T = unknown> {
   readonly name: string;
@@ -105,6 +119,12 @@ export interface TwinCatAdsOperations {
   ioRead(input: IoReadInput): Promise<IoReadResult>;
   ioReadMany(input: IoReadManyInput): Promise<IoReadManyResult>;
   ioReadGroup(input: IoReadGroupInput): Promise<IoReadGroupResult>;
+  tcState(): Promise<TwinCatStateResult>;
+  tcEventList(input?: TcEventListInput): Promise<RuntimeEventListResult>;
+  tcRuntimeErrorList(
+    input?: TcRuntimeErrorListInput,
+  ): Promise<RuntimeErrorListResult>;
+  tcLogRead(input?: TcLogReadInput): Promise<RuntimeLogReadResult>;
   writeSymbol<T = unknown>(
     input: WriteSymbolInput<T>,
   ): Promise<PlcWriteResult<T>>;
@@ -150,6 +170,11 @@ export function createTwinCatAdsRuntime(
     ioRead: async (input) => service.ioRead(input.name),
     ioReadMany: async (input) => service.ioReadMany(input.names),
     ioReadGroup: async (input) => service.ioReadGroup(input.group),
+    tcState: async () => service.tcState(),
+    tcEventList: async (input = {}) => service.tcEventList(input),
+    tcRuntimeErrorList: async (input = {}) =>
+      service.tcRuntimeErrorList(input),
+    tcLogRead: async (input = {}) => service.tcLogRead(input),
     writeSymbol: async (input) => service.writeSymbol(input.name, input.value),
     waitUntil: async (input) => service.waitUntil(input),
     watchSymbol: async (input) => {

@@ -1,6 +1,8 @@
 export {
   LOOPBACK_AMS_NET_ID,
   DEFAULT_IO_ADS_PORT,
+  DEFAULT_RUNTIME_EVENT_LIMIT,
+  DEFAULT_RUNTIME_LOG_LIMIT_BYTES,
   DEFAULT_MAX_WAIT_UNTIL_MS,
   DEFAULT_NC_ADS_PORT,
   extensionConfigSchema,
@@ -12,6 +14,7 @@ export {
   type AdsRouterConnectionConfig,
   type ExtensionConfigInput,
   type ExtensionRuntimeConfig,
+  type RuntimeDiagnosticsConfig,
   type PlcAdsNamedServiceConfig,
   type TwinCatAdsServiceConfigs,
   type TwinCatAdsServiceName,
