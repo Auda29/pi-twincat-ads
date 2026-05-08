@@ -172,7 +172,33 @@ offene TwinCAT-XAE-/Visual-Studio-Projekte. Die Tool-Oberflaeche soll klar von
 den ADS-Runtime-Tools getrennt bleiben, weil Verfuegbarkeit, Berechtigungen und
 Fehlerbilder andere sind.
 
-### 17. Engineering-Backend und Projektkontext evaluieren `[Open]`
+### 17. Agent-neutrale TwinCAT-XAE-Projekt-Guidelines als Skill erstellen `[Open]`
+
+- Einen agent-neutralen Skill fuer TwinCAT-3-Projektarbeit entwerfen, z. B. `twincat-xae-project-guidelines`.
+- Der Skill soll die Uebersetzung zwischen Agentensicht und Usersicht beschreiben: Datei/XML/Pfad -> XAE-Projektbaum, POU, FB, Methode, Aktion, GVL, DUT, Task, I/O-Device, Box, Klemme.
+- TwinCAT-spezifische Arbeitsregeln dokumentieren: GUIDs/IDs/TreeItem-Pfade nicht unnoetig aendern, bestehende Projektmuster kopieren, generierte Artefakte meiden, XML wohlgeformt halten.
+- Sicherheitsregeln festhalten: kein Activate Configuration, Download, Login, Run/Stop, Force Values, Safety-Aenderungen oder Breakpoints ohne explizite User-Anforderung.
+- User-facing Kommunikationsregeln festlegen: Aenderungen in XAE-Begriffen erklaeren und XML-Zeilen/Pfade nur als technische Zusatzreferenz nennen.
+- Skill-Struktur mit schlankem `SKILL.md` und References planen, z. B. `xae-file-to-ui-map.md`, `plc-object-model.md`, `project-safety-rules.md`, `common-twincat-workflows.md`.
+- Skill-Quelle zentral halten, z. B. unter `packages/skills`, damit der Skill nicht Pi- oder MCP-spezifisch ist.
+
+### 18. Skills mit dem Pi-Package ausliefern `[Open]`
+
+- Bestehenden Pi-spezifischen ADS-Skill weiter mit `pi-twincat-ads` ausliefern.
+- Den agent-neutralen `twincat-xae-project-guidelines` Skill zusaetzlich mit dem Pi-Package ausliefern.
+- Pi-ADS-Skill auf logische Konsistenz mit `twincat-xae-project-guidelines` pruefen, insbesondere Begriffe, Safety-Regeln und Abgrenzung von Runtime-Zugriff zu Projektdatei-Arbeit.
+- Packaging so gestalten, dass die zentrale Skill-Quelle nicht manuell dupliziert werden muss oder ein klarer Sync-/Pack-Schritt existiert.
+- Pi-Dokumentation ergaenzen: `twincat-ads` beschreibt Runtime-/ADS-Toolnutzung, `twincat-xae-project-guidelines` beschreibt Projektdatei-/XAE-Arbeitsweise.
+
+### 19. Skills mit dem MCP-Package ausliefern `[Open]`
+
+- Einen MCP-spezifischen Tool-Usage-Skill ergaenzen, analog zum Pi-ADS-Skill, aber fuer die MCP-Tool-Oberflaeche.
+- Den agent-neutralen `twincat-xae-project-guidelines` Skill zusaetzlich mit dem MCP-Package ausliefern.
+- MCP-Tool-Usage-Skill auf logische Konsistenz mit `twincat-xae-project-guidelines` und dem Pi-ADS-Skill pruefen, damit Toolnamen, Begriffe, Safety-Regeln und empfohlene Workflows nicht widerspruechlich sind.
+- Dokumentieren, dass der MCP-Server Tools bereitstellt, waehrend Skills agentenseitig Arbeitsweise, Sprache und Sicherheitsregeln steuern.
+- Packaging so gestalten, dass shared Skills zwischen Pi und MCP konsistent bleiben.
+
+### 20. Engineering-Backend und Projektkontext evaluieren `[Open]`
 
 - Verfuegbare Backends fuer XAE-/Visual-Studio-Projektzugriff evaluieren:
   Automation Interface, DTE/VS-Integration, TcXaeShell-Kontext, GAS/WebSocket
@@ -183,7 +209,7 @@ Fehlerbilder andere sind.
 - `tc_project_state` definieren, um Projektdatei, Projekttyp, aktive Verbindung und Backend-Quelle kompakt auszugeben.
 - Backend-Faehigkeiten explizit melden, z. B. `runtimeOnly`, `engineeringRead`, `engineeringWrite`.
 
-### 18. SysManager-Tree und I/O-Topologie als Engineering-Kontext lesen `[Open]`
+### 21. SysManager-Tree und I/O-Topologie als Engineering-Kontext lesen `[Open]`
 
 - Read-only-Zugriff auf den SysManager-Baum evaluieren.
 - `tc_tree_read` implementieren, um einen konfigurierten oder angegebenen Tree-Pfad gezielt zu lesen.
@@ -193,7 +219,7 @@ Fehlerbilder andere sind.
 - `io_describe_device` und `io_describe_terminal` fuer Geraete/Klemmen pruefen.
 - Schreibende Tree-Operationen wie Create/Rename/Delete nur als spaetere, separat gegatete Phase vormerken.
 
-### 19. PLC-Code-, POU- und Library-Kontext read-only einfuehren `[Open]`
+### 22. PLC-Code-, POU- und Library-Kontext read-only einfuehren `[Open]`
 
 - Classic PLC und PLC++/dateibasierte Projekte getrennt modellieren.
 - `plc_list_pous` implementieren, um Programme, FBs, Funktionen, GVLs, Interfaces und Methoden sichtbar zu machen.
@@ -203,7 +229,7 @@ Fehlerbilder andere sind.
 - `plc_list_libraries` und `plc_describe_library` pruefen, um installierte/referenzierte PLC-Bibliotheken sichtbar zu machen.
 - Schreibende Code-Tools wie `plc_update_pou`, `plc_create_pou`, `plc_delete_pou` erst nach stabilem Read-only-Design planen.
 
-### 20. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
+### 23. Engineering-Build und Fehlerkontext ergaenzen `[Open]`
 
 - `tc_build_project` als ersten Build-Toolcall vorsehen, um ein explizit konfiguriertes TwinCAT-/XAE-Projekt zu bauen.
 - `plc_build_project` als PLC-spezifische Variante pruefen, wenn PLC-Projekte eindeutig getrennt vom TwinCAT-Gesamtprojekt adressiert werden koennen.
@@ -216,7 +242,7 @@ Fehlerbilder andere sind.
 - Safety-Grenze dokumentieren: Build/Compile darf nicht automatisch Activate Configuration, Download, Login, Start oder Stop ausloesen.
 - Ausgabe immer begrenzen und auf konkrete Fehlerreferenzen statt grosse Dumps optimieren.
 
-### 21. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
+### 24. Resource-URI-Schicht fuer Projektartefakte entwerfen `[Open]`
 
 - Stabile Resource-URI-Schemata fuer Engineering-Artefakte definieren, inspiriert von CoAgent:
   `plcc://`, `plcpp://`, `err://`, `io://`, `tcfile://`, `tcfolder://`.
@@ -225,7 +251,7 @@ Fehlerbilder andere sind.
 - MCP Resources/Subscriptions fuer geeignete Artefakte pruefen, insbesondere Watches und Fehlerlisten.
 - URI-Schemata dokumentieren und versionieren, damit spaetere Tool-Erweiterungen kompatibel bleiben.
 
-### 22. HMI-Engineering-Kontext vorsichtig explorieren `[Open]`
+### 25. HMI-Engineering-Kontext vorsichtig explorieren `[Open]`
 
 - HMI-Unterstuetzung zunaechst nur explorativ und read-only behandeln.
 - `hmi_state` pruefen, um aktive HMI-Projekte, Router-Port und Server-Port sichtbar zu machen.
