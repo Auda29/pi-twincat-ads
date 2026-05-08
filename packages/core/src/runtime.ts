@@ -24,6 +24,10 @@ import type {
   PlcWriteMode,
   PlcWriteModeResult,
   PlcWriteResult,
+  TwinCatDiagnoseErrorsInput as TwinCatDiagnoseErrorsServiceInput,
+  TwinCatDiagnoseErrorsResult,
+  TwinCatDiagnoseRuntimeInput as TwinCatDiagnoseRuntimeServiceInput,
+  TwinCatDiagnoseRuntimeResult,
   TwinCatStateResult,
   TwinCatAdsService,
 } from "./ads-service.js";
@@ -77,6 +81,11 @@ export interface TcRuntimeErrorListInput extends RuntimeEventQuery {}
 
 export interface TcLogReadInput extends RuntimeLogQuery {}
 
+export interface TcDiagnoseErrorsInput extends TwinCatDiagnoseErrorsServiceInput {}
+
+export interface TcDiagnoseRuntimeInput
+  extends TwinCatDiagnoseRuntimeServiceInput {}
+
 export interface WriteSymbolInput<T = unknown> {
   readonly name: string;
   readonly value: T;
@@ -125,6 +134,12 @@ export interface TwinCatAdsOperations {
     input?: TcRuntimeErrorListInput,
   ): Promise<RuntimeErrorListResult>;
   tcLogRead(input?: TcLogReadInput): Promise<RuntimeLogReadResult>;
+  tcDiagnoseErrors(
+    input?: TcDiagnoseErrorsInput,
+  ): Promise<TwinCatDiagnoseErrorsResult>;
+  tcDiagnoseRuntime(
+    input?: TcDiagnoseRuntimeInput,
+  ): Promise<TwinCatDiagnoseRuntimeResult>;
   writeSymbol<T = unknown>(
     input: WriteSymbolInput<T>,
   ): Promise<PlcWriteResult<T>>;
@@ -175,6 +190,8 @@ export function createTwinCatAdsRuntime(
     tcRuntimeErrorList: async (input = {}) =>
       service.tcRuntimeErrorList(input),
     tcLogRead: async (input = {}) => service.tcLogRead(input),
+    tcDiagnoseErrors: async (input = {}) => service.tcDiagnoseErrors(input),
+    tcDiagnoseRuntime: async (input = {}) => service.tcDiagnoseRuntime(input),
     writeSymbol: async (input) => service.writeSymbol(input.name, input.value),
     waitUntil: async (input) => service.waitUntil(input),
     watchSymbol: async (input) => {

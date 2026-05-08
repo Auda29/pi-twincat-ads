@@ -269,6 +269,57 @@ function createServiceStub() {
         query: { limitBytes: 1024 },
       };
     },
+    tcDiagnoseErrors: async () => {
+      calls.push("tcDiagnoseErrors");
+      return {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        summary: {
+          runtimeErrorCount: 0,
+          recentEventCount: 0,
+          logBytesRead: 0,
+          runtimeErrorsAvailable: true,
+          recentEventsAvailable: true,
+          runtimeLogAvailable: true,
+          truncated: {
+            runtimeErrors: false,
+            recentEvents: false,
+            runtimeLog: false,
+          },
+        },
+        runtimeErrors: await service.tcRuntimeErrorList(),
+        recentEvents: await service.tcEventList(),
+        runtimeLog: await service.tcLogRead(),
+      };
+    },
+    tcDiagnoseRuntime: async () => {
+      calls.push("tcDiagnoseRuntime");
+      const tcState = await service.tcState();
+      return {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        summary: {
+          adsState: "connected" as const,
+          plcAvailable: true,
+          ncAvailable: false,
+          ioAvailable: true,
+          configuredIoDataPoints: 0,
+          configuredIoGroups: 0,
+          runtimeErrorCount: 0,
+          runtimeErrorsAvailable: true,
+        },
+        tcState,
+        plc: tcState.plc,
+        nc: tcState.nc,
+        io: {
+          available: true,
+          data: {
+            connection: { connected: true },
+            service: service.listServices()[2]!,
+            groups: service.ioListGroups(),
+          },
+        },
+        runtimeErrors: await service.tcRuntimeErrorList(),
+      };
+    },
     writeSymbol: async (name, value) => {
       calls.push(`writeSymbol:${name}`);
       return {
@@ -411,6 +462,8 @@ describe("core runtime contract", () => {
     await runtime.tcEventList({ limit: 5 });
     await runtime.tcRuntimeErrorList({ limit: 5 });
     await runtime.tcLogRead({ limitBytes: 1024 });
+    await runtime.tcDiagnoseErrors({ limit: 5 });
+    await runtime.tcDiagnoseRuntime({ limit: 5 });
     await runtime.writeSymbol({ name: "MAIN.value", value: 7 });
     await runtime.watchSymbol({ name: "MAIN.value" });
     await runtime.waitUntil({
@@ -444,6 +497,14 @@ describe("core runtime contract", () => {
       "tcEventList",
       "tcRuntimeErrorList",
       "tcLogRead",
+      "tcDiagnoseErrors",
+      "tcRuntimeErrorList",
+      "tcEventList",
+      "tcLogRead",
+      "tcDiagnoseRuntime",
+      "tcState",
+      "ioListGroups",
+      "tcRuntimeErrorList",
       "writeSymbol:MAIN.value",
       "watchSymbol:MAIN.value",
       "waitUntil:100",

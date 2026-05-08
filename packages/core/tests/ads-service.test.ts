@@ -34,6 +34,7 @@ const mockState = vi.hoisted(() => ({
   } as Record<string, unknown>,
   rawValues: new Map<string, Buffer>(),
   clientInstances: [] as MockClient[],
+  failConnectPorts: new Set<number>(),
   nextNotificationHandle: 100,
 }));
 
@@ -57,6 +58,10 @@ class MockClient extends EventEmitter {
 
   async connect() {
     mockState.connectCalls += 1;
+    if (mockState.failConnectPorts.has(this.connection.targetAdsPort)) {
+      throw new Error(`Port ${this.connection.targetAdsPort} unavailable`);
+    }
+
     this.connection.connected = true;
     return this.connection;
   }
@@ -337,6 +342,7 @@ describe("AdsService", () => {
     mockState.unsubscribeCalls = 0;
     mockState.nextNotificationHandle = 100;
     mockState.clientInstances.length = 0;
+    mockState.failConnectPorts.clear();
     mockState.rawValues.clear();
     mockState.symbols = {
       "MAIN.value": {
@@ -886,6 +892,50 @@ describe("AdsService", () => {
     const group = await service.ioReadGroup("mixed");
     expect(group.count).toBe(2);
     expect(group.results.map((entry) => entry.value)).toEqual([true, 123]);
+  });
+
+  it("marks diagnose runtime IO unavailable when the IO ADS port cannot connect", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    mockState.failConnectPorts.add(300);
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        io: {
+          targetAdsPort: 300,
+          dataPoints: [
+            {
+              name: "Input1",
+              indexGroup: 0xf020,
+              indexOffset: 0x1f400,
+              type: "BOOL",
+            },
+          ],
+          groups: {
+            inputs: ["Input1"],
+          },
+        },
+      },
+      diagnostics: {
+        eventSources: [],
+        logSources: [],
+      },
+    });
+
+    const result = await service.tcDiagnoseRuntime();
+
+    expect(result.summary.ioAvailable).toBe(false);
+    expect(result.summary.configuredIoDataPoints).toBe(1);
+    expect(result.summary.configuredIoGroups).toBe(1);
+    expect(result.io.error).toContain("Port 300 unavailable");
   });
 
   it("waits until a PLC condition is fulfilled by notification", async () => {

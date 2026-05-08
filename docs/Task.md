@@ -156,7 +156,7 @@ lieferbar und auch ohne offene XAE-Instanz nutzbar bleibt.
   Capability-/Unavailable-Antwort liefern statt beim Start hart zu scheitern.
 - Filter wie `limit`, `since`, `severity` und Textsuche vorsehen, damit die Tools keine grossen unkontrollierten Dumps erzeugen.
 
-### 16. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Open]`
+### 16. Kleine Kombi-Diagnose-Commands bewusst begrenzen `[Done]`
 
 - Kein globales "alles auslesen"-Tool einfuehren.
 - `tc_diagnose_errors` als kleine Kombination aus Runtime-Fehlern, Runtime-Logs und letzten Events implementieren.

@@ -352,6 +352,59 @@ function createRuntimeStub() {
       truncated: false,
       query: { limitBytes: 1024 },
     }),
+    tcDiagnoseErrors: async () => ({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      summary: {
+        runtimeErrorCount: 1,
+        recentEventCount: 1,
+        logBytesRead: 11,
+        runtimeErrorsAvailable: true,
+        recentEventsAvailable: true,
+        runtimeLogAvailable: true,
+        truncated: {
+          runtimeErrors: false,
+          recentEvents: false,
+          runtimeLog: false,
+        },
+      },
+      runtimeErrors: await createRuntimeStub().tcRuntimeErrorList(),
+      recentEvents: await createRuntimeStub().tcEventList(),
+      runtimeLog: await createRuntimeStub().tcLogRead(),
+    }),
+    tcDiagnoseRuntime: async () => {
+      const runtime = createRuntimeStub();
+      const tcState = await runtime.tcState();
+      return {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        summary: {
+          adsState: "connected" as const,
+          plcAvailable: true,
+          ncAvailable: true,
+          ioAvailable: true,
+          configuredIoDataPoints: 1,
+          configuredIoGroups: 1,
+          runtimeErrorCount: 1,
+          runtimeErrorsAvailable: true,
+        },
+        tcState,
+        plc: tcState.plc,
+        nc: tcState.nc,
+        io: {
+          available: true,
+          data: {
+            connection: { connected: true },
+            service: {
+              name: "io" as const,
+              targetAdsPort: 300,
+              connected: false,
+              state: "disconnected" as const,
+            },
+            groups: runtime.ioListGroups(),
+          },
+        },
+        runtimeErrors: await runtime.tcRuntimeErrorList(),
+      };
+    },
     readState: async () => ({
       connection: { connected: true },
       adsState: "connected" as const,
@@ -558,10 +611,18 @@ describe("tools", () => {
       (entry) => entry.name === "tc_runtime_error_list",
     );
     const logTool = tools.find((entry) => entry.name === "tc_log_read");
+    const diagnoseErrorsTool = tools.find(
+      (entry) => entry.name === "tc_diagnose_errors",
+    );
+    const diagnoseRuntimeTool = tools.find(
+      (entry) => entry.name === "tc_diagnose_runtime",
+    );
     expect(stateTool).toBeDefined();
     expect(eventsTool).toBeDefined();
     expect(errorsTool).toBeDefined();
     expect(logTool).toBeDefined();
+    expect(diagnoseErrorsTool).toBeDefined();
+    expect(diagnoseRuntimeTool).toBeDefined();
 
     const state = await stateTool!.execute(
       {},
@@ -597,6 +658,26 @@ describe("tools", () => {
     expect(log.ok).toBe(true);
     if (log.ok) {
       expect(log.data.text).toBe("Runtime log");
+    }
+
+    const diagnoseErrors = await diagnoseErrorsTool!.execute(
+      { limit: 5, logLimitBytes: 1024 },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(diagnoseErrors.ok).toBe(true);
+    if (diagnoseErrors.ok) {
+      expect(diagnoseErrors.data.summary.runtimeErrorCount).toBe(1);
+      expect(diagnoseErrors.data.runtimeLog.text).toBe("Runtime log");
+    }
+
+    const diagnoseRuntime = await diagnoseRuntimeTool!.execute(
+      { limit: 5 },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(diagnoseRuntime.ok).toBe(true);
+    if (diagnoseRuntime.ok) {
+      expect(diagnoseRuntime.data.summary.configuredIoDataPoints).toBe(1);
+      expect(diagnoseRuntime.data.summary.runtimeErrorCount).toBe(1);
     }
   });
 

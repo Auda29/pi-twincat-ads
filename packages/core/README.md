@@ -206,6 +206,14 @@ names. On non-Windows hosts, missing PowerShell/Event Log APIs, or insufficient
 permissions, diagnostic tools return an unavailable capability result instead
 of failing startup.
 
+Use `tcEventList`, `tcRuntimeErrorList`, `tcLogRead`, `tcState`, and the
+PLC/NC/IO read APIs when you know which surface to inspect. Use
+`tcDiagnoseErrors` for a bounded bundle of runtime errors, recent events, and
+runtime log tail. Use `tcDiagnoseRuntime` for a compact runtime health bundle
+covering TC state, PLC state, NC state, IO config state, and active runtime
+errors. Both combo calls keep their own small defaults and still respect the
+configured diagnostic caps.
+
 `readState` returns ADS connection state, write policy, watch count, raw ADS
 state objects, and readable PLC/TwinCAT state summaries such as `Run` or
 `Stop` in `plcRuntimeStatus` and `tcSystemStatus`.

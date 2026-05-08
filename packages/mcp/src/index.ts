@@ -164,6 +164,54 @@ const tcLogReadInputSchema = z
     contains: z.string().trim().min(1).optional(),
   })
   .strict();
+const tcDiagnoseErrorsInputSchema = z
+  .object({
+    eventSource: diagnosticSourceInputSchema.optional(),
+    logSource: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Diagnostic event limit must be at least 1.")
+      .max(100, "Diagnostic event limit must be 100 or lower.")
+      .optional(),
+    logLimitBytes: z
+      .number()
+      .int()
+      .min(1_024, "Diagnostic log byte limit must be at least 1024 bytes.")
+      .max(65_536, "Diagnostic log byte limit must be 65536 bytes or lower.")
+      .optional(),
+    logTailLines: z
+      .number()
+      .int()
+      .min(1, "Diagnostic log tail line limit must be at least 1.")
+      .max(500, "Diagnostic log tail line limit must be 500 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+    id: z
+      .union([
+        z.number().int().min(0),
+        z.array(z.number().int().min(0)).min(1).max(100),
+      ])
+      .optional(),
+  })
+  .strict();
+const tcDiagnoseRuntimeInputSchema = z
+  .object({
+    eventSource: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Runtime error limit must be at least 1.")
+      .max(100, "Runtime error limit must be 100 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+  })
+  .strict();
 const writeInputSchema = z
   .object({
     name: symbolNameSchema,
@@ -590,6 +638,26 @@ export function createMcpToolDefinitions(
       annotations: { readOnlyHint: true, openWorldHint: true },
       execute: async (input: z.infer<typeof tcLogReadInputSchema>) =>
         runtime.tcLogRead(input),
+    },
+    {
+      name: "tc_diagnose_errors",
+      title: "TwinCAT Diagnose Errors",
+      description:
+        "Run a small bounded TwinCAT error diagnostic: runtime errors, recent events, and runtime log tail.",
+      inputSchema: tcDiagnoseErrorsInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof tcDiagnoseErrorsInputSchema>) =>
+        runtime.tcDiagnoseErrors(input),
+    },
+    {
+      name: "tc_diagnose_runtime",
+      title: "TwinCAT Diagnose Runtime",
+      description:
+        "Run a small bounded TwinCAT runtime diagnostic: TC state, PLC state, NC state, IO config state, and active runtime errors.",
+      inputSchema: tcDiagnoseRuntimeInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof tcDiagnoseRuntimeInputSchema>) =>
+        runtime.tcDiagnoseRuntime(input),
     },
     {
       name: "plc_write",

@@ -31,6 +31,8 @@ describe("Pi host extension", () => {
         "tc_event_list",
         "tc_runtime_error_list",
         "tc_log_read",
+        "tc_diagnose_errors",
+        "tc_diagnose_runtime",
       ]),
     );
   });

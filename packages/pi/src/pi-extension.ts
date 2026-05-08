@@ -381,6 +381,41 @@ function formatToolSuccess(toolName: string, data: unknown): string {
       : `TwinCAT runtime log unavailable: ${result.capability.reason ?? "no source available"}.`;
   }
 
+  if (toolName === "tc_diagnose_errors") {
+    const result = data as {
+      summary: {
+        runtimeErrorCount: number;
+        recentEventCount: number;
+        logBytesRead: number;
+        runtimeErrorsAvailable: boolean;
+        recentEventsAvailable: boolean;
+        runtimeLogAvailable: boolean;
+        truncated: {
+          runtimeErrors: boolean;
+          recentEvents: boolean;
+          runtimeLog: boolean;
+        };
+      };
+    };
+    return `TwinCAT error diagnostic: errors=${result.summary.runtimeErrorCount} (available=${result.summary.runtimeErrorsAvailable}, truncated=${result.summary.truncated.runtimeErrors}), events=${result.summary.recentEventCount} (available=${result.summary.recentEventsAvailable}, truncated=${result.summary.truncated.recentEvents}), logBytes=${result.summary.logBytesRead} (available=${result.summary.runtimeLogAvailable}, truncated=${result.summary.truncated.runtimeLog}).`;
+  }
+
+  if (toolName === "tc_diagnose_runtime") {
+    const result = data as {
+      summary: {
+        adsState: string;
+        plcAvailable: boolean;
+        ncAvailable: boolean;
+        ioAvailable: boolean;
+        configuredIoDataPoints: number;
+        configuredIoGroups: number;
+        runtimeErrorCount: number;
+        runtimeErrorsAvailable: boolean;
+      };
+    };
+    return `TwinCAT runtime diagnostic: ADS=${result.summary.adsState}, PLC available=${result.summary.plcAvailable}, NC available=${result.summary.ncAvailable}, IO available=${result.summary.ioAvailable}, IO data points=${result.summary.configuredIoDataPoints}, IO groups=${result.summary.configuredIoGroups}, runtime errors=${result.summary.runtimeErrorCount} (available=${result.summary.runtimeErrorsAvailable}).`;
+  }
+
   if (toolName === "plc_watch") {
     const result = data as { watch: { name: string; notificationHandle: number } };
     return `Watch active for ${result.watch.name} (handle ${result.watch.notificationHandle}).`;
@@ -706,6 +741,55 @@ const toolSpecs: ToolSpec[] = [
         ),
         since: Type.Optional(Type.String({ minLength: 1 })),
         severity: Type.Optional(diagnosticSeverityInputType),
+        contains: Type.Optional(Type.String({ minLength: 1 })),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "tc_diagnose_errors",
+    label: "TwinCAT Error Diagnostic",
+    description:
+      "Run a small bounded TwinCAT error diagnostic: runtime errors, recent events, and runtime log tail.",
+    parameters: Type.Object(
+      {
+        eventSource: Type.Optional(Type.String({ minLength: 1 })),
+        logSource: Type.Optional(Type.String({ minLength: 1 })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+        logLimitBytes: Type.Optional(
+          Type.Integer({ minimum: 1_024, maximum: 65_536 }),
+        ),
+        logTailLines: Type.Optional(
+          Type.Integer({ minimum: 1, maximum: 500 }),
+        ),
+        since: Type.Optional(Type.String({ minLength: 1 })),
+        until: Type.Optional(Type.String({ minLength: 1 })),
+        severity: Type.Optional(diagnosticSeverityInputType),
+        contains: Type.Optional(Type.String({ minLength: 1 })),
+        id: Type.Optional(
+          Type.Union([
+            Type.Integer({ minimum: 0 }),
+            Type.Array(Type.Integer({ minimum: 0 }), {
+              minItems: 1,
+              maxItems: 100,
+            }),
+          ]),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "tc_diagnose_runtime",
+    label: "TwinCAT Runtime Diagnostic",
+    description:
+      "Run a small bounded TwinCAT runtime diagnostic: TC state, PLC state, NC state, IO config state, and active runtime errors.",
+    parameters: Type.Object(
+      {
+        eventSource: Type.Optional(Type.String({ minLength: 1 })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+        since: Type.Optional(Type.String({ minLength: 1 })),
+        until: Type.Optional(Type.String({ minLength: 1 })),
         contains: Type.Optional(Type.String({ minLength: 1 })),
       },
       { additionalProperties: false },

@@ -144,11 +144,18 @@ TwinCAT runtime diagnostics:
 - `tc_event_list`
 - `tc_runtime_error_list`
 - `tc_log_read`
+- `tc_diagnose_errors`
+- `tc_diagnose_runtime`
 
 Diagnostic tools use configured sources under `diagnostics`. The defaults target
 the local Windows `Application` Event Log filtered for TwinCAT/Beckhoff entries;
 when that API is unavailable, the result reports unavailable capability metadata
 instead of failing server startup.
+
+Prefer the individual tools for targeted investigation. Use
+`tc_diagnose_errors` for a bounded first look at runtime errors, nearby events,
+and log tail; use `tc_diagnose_runtime` for a compact TC/PLC/NC/IO runtime health
+summary plus active runtime errors.
 
 Writes and write gates:
 

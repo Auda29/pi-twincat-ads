@@ -304,6 +304,58 @@ function createRuntimeStub(
       truncated: false,
       query: { limitBytes: 1024 },
     }),
+    tcDiagnoseErrors: async () => ({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      summary: {
+        runtimeErrorCount: 1,
+        recentEventCount: 1,
+        logBytesRead: 11,
+        runtimeErrorsAvailable: true,
+        recentEventsAvailable: true,
+        runtimeLogAvailable: true,
+        truncated: {
+          runtimeErrors: false,
+          recentEvents: false,
+          runtimeLog: false,
+        },
+      },
+      runtimeErrors: await runtime.tcRuntimeErrorList(),
+      recentEvents: await runtime.tcEventList(),
+      runtimeLog: await runtime.tcLogRead(),
+    }),
+    tcDiagnoseRuntime: async () => {
+      const tcState = await runtime.tcState();
+      return {
+        timestamp: "2026-01-01T00:00:00.000Z",
+        summary: {
+          adsState: "connected" as const,
+          plcAvailable: true,
+          ncAvailable: true,
+          ioAvailable: true,
+          configuredIoDataPoints: 1,
+          configuredIoGroups: 1,
+          runtimeErrorCount: 1,
+          runtimeErrorsAvailable: true,
+        },
+        tcState,
+        plc: tcState.plc,
+        nc: tcState.nc,
+        io: {
+          available: true,
+          data: {
+            connection: { connected: true },
+            service: {
+              name: "io" as const,
+              targetAdsPort: 300,
+              connected: false,
+              state: "disconnected" as const,
+            },
+            groups: runtime.ioListGroups(),
+          },
+        },
+        runtimeErrors: await runtime.tcRuntimeErrorList(),
+      };
+    },
     writeSymbol: async ({ name, value }: { name: string; value: unknown }) => ({
       name,
       value,
@@ -428,6 +480,8 @@ describe("mcp tool definitions", () => {
       "tc_event_list",
       "tc_runtime_error_list",
       "tc_log_read",
+      "tc_diagnose_errors",
+      "tc_diagnose_runtime",
       "plc_write",
       "plc_watch",
       "plc_wait_until",
@@ -578,6 +632,32 @@ describe("mcp tool definitions", () => {
     expect(log.structuredContent).toMatchObject({
       text: "Runtime log",
       bytesRead: 11,
+    });
+
+    const diagnoseErrors = await callMcpTool(tools, "tc_diagnose_errors", {
+      limit: 5,
+      logLimitBytes: 1024,
+    });
+    expect(diagnoseErrors.isError).toBeUndefined();
+    expect(diagnoseErrors.structuredContent).toMatchObject({
+      summary: {
+        runtimeErrorCount: 1,
+        recentEventCount: 1,
+        logBytesRead: 11,
+      },
+    });
+
+    const diagnoseRuntime = await callMcpTool(tools, "tc_diagnose_runtime", {
+      limit: 5,
+    });
+    expect(diagnoseRuntime.isError).toBeUndefined();
+    expect(diagnoseRuntime.structuredContent).toMatchObject({
+      summary: {
+        plcAvailable: true,
+        ncAvailable: true,
+        configuredIoDataPoints: 1,
+        runtimeErrorCount: 1,
+      },
     });
   });
 });

@@ -32,6 +32,7 @@ import {
 } from "./config.js";
 import {
   RuntimeDiagnostics,
+  type RuntimeDiagnosticSeverity,
   type RuntimeDiagnosticsCapabilities,
   type RuntimeDiagnosticsDependencies,
   type RuntimeErrorListResult,
@@ -208,6 +209,79 @@ export interface TwinCatStateResult {
   readonly plc: TwinCatStateComponent<PlcStateResult>;
   readonly nc: TwinCatStateComponent<NcStateResult>;
   readonly diagnostics: RuntimeDiagnosticsCapabilities;
+}
+
+export interface TwinCatDiagnoseErrorsInput {
+  readonly eventSource?: string | undefined;
+  readonly logSource?: string | undefined;
+  readonly limit?: number | undefined;
+  readonly logLimitBytes?: number | undefined;
+  readonly logTailLines?: number | undefined;
+  readonly since?: string | undefined;
+  readonly until?: string | undefined;
+  readonly severity?:
+    | RuntimeDiagnosticSeverity
+    | readonly RuntimeDiagnosticSeverity[]
+    | undefined;
+  readonly contains?: string | undefined;
+  readonly id?: number | readonly number[] | undefined;
+}
+
+export interface TwinCatDiagnoseErrorsSummary {
+  readonly runtimeErrorCount: number;
+  readonly recentEventCount: number;
+  readonly logBytesRead: number;
+  readonly runtimeErrorsAvailable: boolean;
+  readonly recentEventsAvailable: boolean;
+  readonly runtimeLogAvailable: boolean;
+  readonly truncated: {
+    readonly runtimeErrors: boolean;
+    readonly recentEvents: boolean;
+    readonly runtimeLog: boolean;
+  };
+}
+
+export interface TwinCatDiagnoseErrorsResult {
+  readonly timestamp: string;
+  readonly summary: TwinCatDiagnoseErrorsSummary;
+  readonly runtimeErrors: RuntimeErrorListResult;
+  readonly recentEvents: RuntimeEventListResult;
+  readonly runtimeLog: RuntimeLogReadResult;
+}
+
+export interface TwinCatIoStateResult {
+  readonly connection: AdsClientConnection;
+  readonly service: AdsNamedServiceConnectionSummary;
+  readonly groups: IoListGroupsResult;
+}
+
+export interface TwinCatDiagnoseRuntimeInput {
+  readonly eventSource?: string | undefined;
+  readonly limit?: number | undefined;
+  readonly since?: string | undefined;
+  readonly until?: string | undefined;
+  readonly contains?: string | undefined;
+}
+
+export interface TwinCatDiagnoseRuntimeSummary {
+  readonly adsState: AdsConnectionState;
+  readonly plcAvailable: boolean;
+  readonly ncAvailable: boolean;
+  readonly ioAvailable: boolean;
+  readonly configuredIoDataPoints: number;
+  readonly configuredIoGroups: number;
+  readonly runtimeErrorCount: number;
+  readonly runtimeErrorsAvailable: boolean;
+}
+
+export interface TwinCatDiagnoseRuntimeResult {
+  readonly timestamp: string;
+  readonly summary: TwinCatDiagnoseRuntimeSummary;
+  readonly tcState: TwinCatStateResult;
+  readonly plc: TwinCatStateComponent<PlcStateResult>;
+  readonly nc: TwinCatStateComponent<NcStateResult>;
+  readonly io: TwinCatStateComponent<TwinCatIoStateResult>;
+  readonly runtimeErrors: RuntimeErrorListResult;
 }
 
 export interface NcAxisOnlineState {
@@ -497,6 +571,10 @@ function evaluateCondition(
   }
 }
 
+const DEFAULT_DIAGNOSE_EVENT_LIMIT = 10;
+const DEFAULT_DIAGNOSE_LOG_LIMIT_BYTES = 8_192;
+const DEFAULT_DIAGNOSE_LOG_TAIL_LINES = 80;
+
 export interface TwinCatAdsService {
   readonly state: AdsConnectionState;
   readonly writeMode: PlcWriteMode;
@@ -528,6 +606,12 @@ export interface TwinCatAdsService {
   tcEventList(input?: RuntimeEventQuery): Promise<RuntimeEventListResult>;
   tcRuntimeErrorList(input?: RuntimeEventQuery): Promise<RuntimeErrorListResult>;
   tcLogRead(input?: RuntimeLogQuery): Promise<RuntimeLogReadResult>;
+  tcDiagnoseErrors(
+    input?: TwinCatDiagnoseErrorsInput,
+  ): Promise<TwinCatDiagnoseErrorsResult>;
+  tcDiagnoseRuntime(
+    input?: TwinCatDiagnoseRuntimeInput,
+  ): Promise<TwinCatDiagnoseRuntimeResult>;
   writeSymbol<T = unknown>(
     name: string,
     value: T,
@@ -1370,6 +1454,89 @@ export class AdsService {
     return this.runtimeDiagnostics.readLog(input);
   }
 
+  async tcDiagnoseErrors(
+    input: TwinCatDiagnoseErrorsInput = {},
+  ): Promise<TwinCatDiagnoseErrorsResult> {
+    const eventQuery: RuntimeEventQuery = {
+      source: input.eventSource,
+      limit: input.limit ?? DEFAULT_DIAGNOSE_EVENT_LIMIT,
+      since: input.since,
+      until: input.until,
+      severity: input.severity,
+      contains: input.contains,
+      id: input.id,
+    };
+    const logQuery: RuntimeLogQuery = {
+      source: input.logSource,
+      limitBytes: input.logLimitBytes ?? DEFAULT_DIAGNOSE_LOG_LIMIT_BYTES,
+      tailLines: input.logTailLines ?? DEFAULT_DIAGNOSE_LOG_TAIL_LINES,
+      since: input.since,
+      severity: input.severity,
+      contains: input.contains,
+    };
+    const [runtimeErrors, recentEvents, runtimeLog] = await Promise.all([
+      this.tcRuntimeErrorList(eventQuery),
+      this.tcEventList(eventQuery),
+      this.tcLogRead(logQuery),
+    ]);
+
+    return {
+      timestamp: new Date().toISOString(),
+      summary: {
+        runtimeErrorCount: runtimeErrors.count,
+        recentEventCount: recentEvents.count,
+        logBytesRead: runtimeLog.bytesRead,
+        runtimeErrorsAvailable: runtimeErrors.available,
+        recentEventsAvailable: recentEvents.available,
+        runtimeLogAvailable: runtimeLog.available,
+        truncated: {
+          runtimeErrors: runtimeErrors.truncated,
+          recentEvents: recentEvents.truncated,
+          runtimeLog: runtimeLog.truncated,
+        },
+      },
+      runtimeErrors,
+      recentEvents,
+      runtimeLog,
+    };
+  }
+
+  async tcDiagnoseRuntime(
+    input: TwinCatDiagnoseRuntimeInput = {},
+  ): Promise<TwinCatDiagnoseRuntimeResult> {
+    const ioGroups = this.ioListGroups();
+    const [tcState, io, runtimeErrors] = await Promise.all([
+      this.tcState(),
+      this.#captureStateComponent(() => this.#readIoState(ioGroups)),
+      this.tcRuntimeErrorList({
+        source: input.eventSource,
+        limit: input.limit ?? DEFAULT_DIAGNOSE_EVENT_LIMIT,
+        since: input.since,
+        until: input.until,
+        contains: input.contains,
+      }),
+    ]);
+
+    return {
+      timestamp: new Date().toISOString(),
+      summary: {
+        adsState: tcState.adsState,
+        plcAvailable: tcState.plc.available,
+        ncAvailable: tcState.nc.available,
+        ioAvailable: io.available,
+        configuredIoDataPoints: ioGroups.count,
+        configuredIoGroups: ioGroups.groups.length,
+        runtimeErrorCount: runtimeErrors.count,
+        runtimeErrorsAvailable: runtimeErrors.available,
+      },
+      tcState,
+      plc: tcState.plc,
+      nc: tcState.nc,
+      io,
+      runtimeErrors,
+    };
+  }
+
   async readValue<T = unknown>(name: string): Promise<PlcReadResult<T>> {
     await this.connect();
     const result = await this.#client.readValue<T>(name);
@@ -1954,6 +2121,20 @@ export class AdsService {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async #readIoState(groups: IoListGroupsResult): Promise<TwinCatIoStateResult> {
+    const connection = await this.connectService("io");
+    const service = this.listServices().find((entry) => entry.name === "io");
+    if (service === undefined) {
+      throw new Error("IO ADS service summary is not available.");
+    }
+
+    return {
+      connection,
+      service,
+      groups,
+    };
   }
 
   #toNcAxisSummary(axis: NcAxisConfig): NcAxisSummary {

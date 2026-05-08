@@ -6,9 +6,10 @@ description: >-
   plc_read_group, plc_write, plc_watch, plc_wait_until, nc_state,
   nc_list_axes, nc_read_axis, nc_read_axis_many, nc_read_error, io_list_groups,
   io_read, io_read_many, io_read_group, tc_state, tc_event_list,
-  tc_runtime_error_list, tc_log_read). Use when inspecting TwinCAT PLC
-  symbols, NC axis state, IO data points, runtime state, runtime diagnostics,
-  configured groups, or ADS watches over a configured ADS connection.
+  tc_runtime_error_list, tc_log_read, tc_diagnose_errors,
+  tc_diagnose_runtime). Use when inspecting TwinCAT PLC symbols, NC axis state,
+  IO data points, runtime state, runtime diagnostics, configured groups, or ADS
+  watches over a configured ADS connection.
 ---
 
 # TwinCAT ADS Skill
@@ -23,12 +24,13 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 4. Use `plc_list_groups` and `plc_read_group` when the config defines reusable PLC symbol groups.
 5. Use `nc_state`, `nc_list_axes`, `nc_read_axis`, or `nc_read_error` when the task concerns NC axes, motion state, position, velocity, or NC errors.
 6. Use `io_list_groups`, `io_read`, `io_read_many`, or `io_read_group` when the task concerns configured IO process data, sensors, valves, safety inputs, or outputs.
-7. Use `tc_state`, `tc_event_list`, `tc_runtime_error_list`, or `tc_log_read` when the task concerns TwinCAT-wide runtime diagnostics rather than one PLC symbol, NC axis, or IO data point.
-8. Use `plc_read` or `plc_read_many` before making decisions.
-9. Use `plc_wait_until` for a specific PLC state transition or condition; use `plc_watch` for ongoing PLC observation.
-10. Only use `plc_write` after checking state, symbol path, and write permissions.
-11. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
-12. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
+7. Use `tc_state`, `tc_event_list`, `tc_runtime_error_list`, or `tc_log_read` when the task concerns a specific TwinCAT-wide runtime diagnostic surface rather than one PLC symbol, NC axis, or IO data point.
+8. Use `tc_diagnose_errors` or `tc_diagnose_runtime` for bounded first-pass triage when the user asks for a compact error or runtime health overview.
+9. Use `plc_read` or `plc_read_many` before making decisions.
+10. Use `plc_wait_until` for a specific PLC state transition or condition; use `plc_watch` for ongoing PLC observation.
+11. Only use `plc_write` after checking state, symbol path, and write permissions.
+12. Use `plc_list_watches` to inspect current subscriptions and avoid duplicates.
+13. Pay attention to hook-provided `failedSnapshots` if configured context symbols could not be read.
 
 ## Tool guidance
 
@@ -140,6 +142,10 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 - Use `tc_event_list` for recent TwinCAT/Event Log messages with filters such as `limit`, `since`, `severity`, `contains`, and `source`.
 - Use `tc_runtime_error_list` when the task is specifically about runtime/system errors. It defaults to critical/error severities unless the caller provides another severity filter.
 - Use `tc_log_read` for bounded runtime log text from configured log sources.
+- Use `tc_diagnose_errors` when the user asks for a compact error triage. It combines runtime errors, recent events, and a small runtime log tail with explicit limits and filters.
+- Use `tc_diagnose_runtime` when the user asks for a compact runtime health overview. It combines TC state, PLC state, NC state, IO config state, and active runtime errors.
+- Prefer the individual commands when the user already names the exact state, event, log, NC axis, IO data point, or PLC symbol to inspect.
+- Do not treat the combo commands as global dump tools. Keep `limit`, `logLimitBytes`, `logTailLines`, `since`, `severity`, and `contains` narrow when using them.
 - Diagnostic sources are configured under `diagnostics.eventSources` and `diagnostics.logSources`.
 - The default local source uses the Windows `Application` Event Log filtered for TwinCAT/Beckhoff provider names when available.
 - If a diagnostic result has `available=false`, report the capability reason instead of treating it as a PLC failure.

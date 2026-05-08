@@ -24,6 +24,8 @@ import {
   type RuntimeErrorListResult,
   type RuntimeEventListResult,
   type RuntimeLogReadResult,
+  type TwinCatDiagnoseErrorsResult,
+  type TwinCatDiagnoseRuntimeResult,
   type TwinCatStateResult,
   type TwinCatAdsRuntime,
 } from "twincat-mcp-core";
@@ -181,6 +183,56 @@ const tcLogReadInputSchema = z
       .optional(),
     since: diagnosticDateTimeSchema.optional(),
     severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+const tcDiagnoseErrorsInputSchema = z
+  .object({
+    eventSource: diagnosticSourceInputSchema.optional(),
+    logSource: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Diagnostic event limit must be at least 1.")
+      .max(100, "Diagnostic event limit must be 100 or lower.")
+      .optional(),
+    logLimitBytes: z
+      .number()
+      .int()
+      .min(1_024, "Diagnostic log byte limit must be at least 1024 bytes.")
+      .max(65_536, "Diagnostic log byte limit must be 65536 bytes or lower.")
+      .optional(),
+    logTailLines: z
+      .number()
+      .int()
+      .min(1, "Diagnostic log tail line limit must be at least 1.")
+      .max(500, "Diagnostic log tail line limit must be 500 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
+    severity: diagnosticSeverityInputSchema.optional(),
+    contains: z.string().trim().min(1).optional(),
+    id: z
+      .union([
+        z.number().int().min(0),
+        z.array(z.number().int().min(0)).min(1).max(100),
+      ])
+      .optional(),
+  })
+  .strict();
+
+const tcDiagnoseRuntimeInputSchema = z
+  .object({
+    eventSource: diagnosticSourceInputSchema.optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1, "Runtime error limit must be at least 1.")
+      .max(100, "Runtime error limit must be 100 or lower.")
+      .optional(),
+    since: diagnosticDateTimeSchema.optional(),
+    until: diagnosticDateTimeSchema.optional(),
     contains: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -376,6 +428,8 @@ export interface TcStateToolOutput extends TwinCatStateResult {}
 export interface TcEventListToolOutput extends RuntimeEventListResult {}
 export interface TcRuntimeErrorListToolOutput extends RuntimeErrorListResult {}
 export interface TcLogReadToolOutput extends RuntimeLogReadResult {}
+export interface TcDiagnoseErrorsToolOutput extends TwinCatDiagnoseErrorsResult {}
+export interface TcDiagnoseRuntimeToolOutput extends TwinCatDiagnoseRuntimeResult {}
 export interface PlcWriteToolOutput {
   readonly result: {
     readonly name: string;
@@ -501,6 +555,14 @@ export function createToolDefinitions(): Array<
       TcRuntimeErrorListToolOutput
     >
   | ToolDefinition<z.infer<typeof tcLogReadInputSchema>, TcLogReadToolOutput>
+  | ToolDefinition<
+      z.infer<typeof tcDiagnoseErrorsInputSchema>,
+      TcDiagnoseErrorsToolOutput
+    >
+  | ToolDefinition<
+      z.infer<typeof tcDiagnoseRuntimeInputSchema>,
+      TcDiagnoseRuntimeToolOutput
+    >
   | ToolDefinition<z.infer<typeof stateInputSchema>, PlcStateToolOutput>
   | ToolDefinition<z.infer<typeof writeInputSchema>, PlcWriteToolOutput>
   | ToolDefinition<
@@ -684,6 +746,20 @@ export function createToolDefinitions(): Array<
         "Read bounded runtime log text from a configured diagnostic source.",
       inputSchema: tcLogReadInputSchema,
       handler: async (input, context) => context.runtime.tcLogRead(input),
+    }),
+    createToolDefinition({
+      name: "tc_diagnose_errors",
+      description:
+        "Run a small bounded TwinCAT error diagnostic: runtime errors, recent events, and runtime log tail.",
+      inputSchema: tcDiagnoseErrorsInputSchema,
+      handler: async (input, context) => context.runtime.tcDiagnoseErrors(input),
+    }),
+    createToolDefinition({
+      name: "tc_diagnose_runtime",
+      description:
+        "Run a small bounded TwinCAT runtime diagnostic: TC state, PLC state, NC state, IO config state, and active runtime errors.",
+      inputSchema: tcDiagnoseRuntimeInputSchema,
+      handler: async (input, context) => context.runtime.tcDiagnoseRuntime(input),
     }),
     createToolDefinition({
       name: "plc_watch",

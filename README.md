@@ -154,6 +154,12 @@ Common fields:
 - `diagnostics.logSources`: sources for `tc_log_read`; supports local Windows Event Log and configured files
 - `diagnostics.maxEvents` / `diagnostics.maxLogBytes`: caps for diagnostic output
 
+`tc_diagnose_errors` and `tc_diagnose_runtime` are deliberately small bundles
+over these same sources. Prefer the individual tools when you already know the
+exact PLC symbol, NC axis, IO point, event source, or log source. Use the combo
+tools for first-pass triage when the user asks for "what is wrong right now?"
+or a compact TwinCAT-wide runtime health check.
+
 ## Safety Model
 
 Writes are blocked unless all three gates allow them:
@@ -202,8 +208,9 @@ such as `TWINCAT_ADS_TARGET_AMS_NET_ID`. MCP exposes PLC reads, writes,
 symbol description, configured groups, watches, wait-until operations, NC
 read-only axis diagnostics, IO read-only data point/group reads, and
 TwinCAT-wide runtime diagnostics (`tc_state`, `tc_event_list`,
-`tc_runtime_error_list`, `tc_log_read`) as tools. Watches are modeled as normal
-tools, not as MCP resources or subscriptions yet.
+`tc_runtime_error_list`, `tc_log_read`, `tc_diagnose_errors`,
+`tc_diagnose_runtime`) as tools. Watches are modeled as normal tools, not as MCP
+resources or subscriptions yet.
 
 See `packages/mcp/README.md` for tool names and configuration details.
 
