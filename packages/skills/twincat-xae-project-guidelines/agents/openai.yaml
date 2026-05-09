@@ -1,0 +1,4 @@
+interface:
+  display_name: "TwinCAT XAE Project Guidelines"
+  short_description: "Guidelines for TwinCAT XAE project work"
+  default_prompt: "Use $twincat-xae-project-guidelines when editing TwinCAT XAE or PLC project files."

@@ -15,7 +15,7 @@ offene TwinCAT-XAE-/Visual-Studio-Projekte. Die Tool-Oberflaeche soll klar von
 den ADS-Runtime-Tools getrennt bleiben, weil Verfuegbarkeit, Berechtigungen und
 Fehlerbilder andere sind.
 
-### 17. Agent-neutrale TwinCAT-XAE-Projekt-Guidelines als Skill erstellen `[Open]`
+### 17. Agent-neutrale TwinCAT-XAE-Projekt-Guidelines als Skill erstellen `[Done]`
 
 - Einen agent-neutralen Skill fuer TwinCAT-3-Projektarbeit entwerfen, z. B. `twincat-xae-project-guidelines`.
 - Der Skill soll die Uebersetzung zwischen Agentensicht und Usersicht beschreiben: Datei/XML/Pfad -> XAE-Projektbaum, POU, FB, Methode, Aktion, GVL, DUT, Task, I/O-Device, Box, Klemme.
