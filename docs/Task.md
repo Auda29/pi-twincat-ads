@@ -25,7 +25,7 @@ Fehlerbilder andere sind.
 - Skill-Struktur mit schlankem `SKILL.md` und References planen, z. B. `xae-file-to-ui-map.md`, `plc-object-model.md`, `project-safety-rules.md`, `common-twincat-workflows.md`.
 - Skill-Quelle zentral halten, z. B. unter `packages/skills`, damit der Skill nicht Pi- oder MCP-spezifisch ist.
 
-### 18. Skills mit dem Pi-Package ausliefern `[Done]`
+### 18. Skills mit dem Pi-Package ausliefern `[Review]`
 
 - Bestehenden Pi-spezifischen ADS-Skill weiter mit `pi-twincat-ads` ausliefern.
 - Den agent-neutralen `twincat-xae-project-guidelines` Skill zusaetzlich mit dem Pi-Package ausliefern.
