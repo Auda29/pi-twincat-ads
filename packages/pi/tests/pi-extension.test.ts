@@ -57,4 +57,32 @@ describe("Pi host extension", () => {
       "Listed 2 configured NC axes: X1-TRAV (id 1, port 500); Y1-BAB (id 2, port 500, Y axis).",
     );
   });
+
+  it("formats unavailable NC axis status without claiming inactive flags", () => {
+    expect(
+      formatToolSuccess("nc_read_axis_status", {
+        status: {
+          axis: { name: "Y1-BAB", id: 2 },
+          timestamp: "2026-05-11T12:32:40.577Z",
+          status: {
+            ready: false,
+            referenced: false,
+          },
+          warnings: [
+            {
+              section: "status",
+              message: "NC axis status flag ready at offset 130 could not be read.",
+            },
+            {
+              section: "status",
+              message:
+                "NC axis status flag referenced at offset 131 could not be read.",
+            },
+          ],
+        },
+      }),
+    ).toBe(
+      "NC axis Y1-BAB (id 2) status=unavailable, warnings=2: NC axis status flag ready at offset 130 could not be read. NC axis status flag referenced at offset 131 could not be read. @ 2026-05-11T12:32:40.577Z",
+    );
+  });
 });

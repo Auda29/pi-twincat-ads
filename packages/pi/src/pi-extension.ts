@@ -62,6 +62,14 @@ function formatValue(value: unknown): string {
   }
 }
 
+function formatWarningMessages(warnings: Array<{ message?: string }>): string {
+  const messages = warnings
+    .map((warning) => warning.message)
+    .filter((message): message is string => message !== undefined && message.length > 0);
+
+  return messages.length === 0 ? "" : `: ${messages.join(" ")}`;
+}
+
 function formatSnapshotLine(snapshot: {
   name: string;
   value: unknown;
@@ -332,19 +340,25 @@ export function formatToolSuccess(toolName: string, data: unknown): string {
       status: {
         axis: { name: string; id: number };
         status: Record<string, boolean>;
-        warnings?: unknown[];
+        warnings?: Array<{ message?: string }>;
         timestamp: string;
       };
     };
     const activeFlags = Object.entries(result.status.status)
       .filter(([, value]) => value)
       .map(([key]) => key);
+    const warningMessages = result.status.warnings ?? [];
+    const warningCount = warningMessages.length;
     const status =
-      activeFlags.length === 0 ? "no active flags" : activeFlags.join(", ");
+      activeFlags.length === 0 && warningCount >= Object.keys(result.status.status).length
+        ? "unavailable"
+        : activeFlags.length === 0
+          ? "no active flags"
+          : activeFlags.join(", ");
     const warnings =
-      result.status.warnings === undefined || result.status.warnings.length === 0
+      warningCount === 0
         ? ""
-        : `, warnings=${result.status.warnings.length}`;
+        : `, warnings=${warningCount}${formatWarningMessages(warningMessages)}`;
     return `NC axis ${result.status.axis.name} (id ${result.status.axis.id}) status=${status}${warnings} @ ${result.status.timestamp}`;
   }
 
