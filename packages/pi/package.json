@@ -51,10 +51,10 @@
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
     "test": "vitest run",
-    "sync:skills": "node ../../scripts/sync-pi-skills.mjs",
+    "sync:skills": "node ../../scripts/sync-package-skills.mjs --package pi",
     "smoke:local": "node ./scripts/local-dev-smoke.mjs",
     "prepack": "npm run sync:skills",
-    "postpack": "node ../../scripts/sync-pi-skills.mjs --clean",
+    "postpack": "node ../../scripts/sync-package-skills.mjs --package pi --clean",
     "prepublishOnly": "npm run check && npm test && npm run build"
   },
   "dependencies": {

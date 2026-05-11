@@ -14,6 +14,25 @@ npm install -g twincat-mcp
 
 Node.js 20 or newer is required.
 
+## Bundled Skills
+
+The package ships skills for agents that support npm-bundled skill discovery:
+
+- `twincat-mcp-ads`: MCP-specific runtime/ADS tool guidance for PLC, NC, IO,
+  watches, write gates, connection tools, and TwinCAT runtime diagnostics.
+- `twincat-xae-project-guidelines`: agent-neutral guidance for offline TwinCAT
+  XAE/Visual Studio project-file work, including PLC project XML, POUs, GVLs,
+  DUTs, tasks, I/O devices, boxes, and terminals.
+
+The MCP server provides tools. Skills are agent-side guidance for choosing those
+tools, explaining results, and respecting the runtime/project-file safety
+boundary.
+
+The XAE skill source lives centrally under
+`packages/skills/twincat-xae-project-guidelines`. It is copied into this package
+by the MCP `prepack` lifecycle and removed again by `postpack`, so npm artifacts
+contain the skill without maintaining a second manual copy.
+
 ## Run
 
 ```bash
@@ -127,6 +146,8 @@ NC read-only:
 
 - `nc_state`
 - `nc_list_axes`
+- `nc_read_axis_position`
+- `nc_read_axis_status`
 - `nc_read_axis`
 - `nc_read_axis_many`
 - `nc_read_error`
@@ -187,10 +208,15 @@ The default behavior is read-only.
 ## Development
 
 ```bash
+npm run sync:skills -w twincat-mcp
 npm run test:mcp
 npm run build
 npm run pack:mcp
 ```
+
+`npm run pack:mcp` runs the MCP package `prepack`/`postpack` hooks and verifies
+that shared skills are present in the package tarball while keeping the
+repository source of truth under `packages/skills`.
 
 For package-level checks:
 

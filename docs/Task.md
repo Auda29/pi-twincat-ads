@@ -33,7 +33,7 @@ Fehlerbilder andere sind.
 - Packaging so gestalten, dass die zentrale Skill-Quelle nicht manuell dupliziert werden muss oder ein klarer Sync-/Pack-Schritt existiert.
 - Pi-Dokumentation ergaenzen: `twincat-ads` beschreibt Runtime-/ADS-Toolnutzung, `twincat-xae-project-guidelines` beschreibt Projektdatei-/XAE-Arbeitsweise.
 
-### 19. Skills mit dem MCP-Package ausliefern `[Open]`
+### 19. Skills mit dem MCP-Package ausliefern `[Review]`
 
 - Einen MCP-spezifischen Tool-Usage-Skill ergaenzen, analog zum Pi-ADS-Skill, aber fuer die MCP-Tool-Oberflaeche.
 - Den agent-neutralen `twincat-xae-project-guidelines` Skill zusaetzlich mit dem MCP-Package ausliefern.

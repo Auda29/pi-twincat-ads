@@ -22,6 +22,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE"
   ],
@@ -31,7 +32,10 @@
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:skills": "node ../../scripts/sync-package-skills.mjs --package mcp",
+    "prepack": "npm run sync:skills",
+    "postpack": "node ../../scripts/sync-package-skills.mjs --package mcp --clean"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
