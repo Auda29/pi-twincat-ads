@@ -880,6 +880,8 @@ function toRawReadCommand(symbol: AdsSymbol): ReadRawMultiCommand {
 
 const NC_AXIS_STATE_INDEX_GROUP_BASE = 0x4100;
 const NC_AXIS_ONLINE_STATE_OFFSET = 0x00000000;
+const NC_AXIS_ONLINE_STATE_SIZE = 256;
+const NC_AXIS_ONLINE_STATE_LEGACY_SIZE = 112;
 const NC_AXIS_ERROR_CODE_OFFSET = 0x000000b1;
 
 const NC_AXIS_STATUS_OFFSETS = {
@@ -942,6 +944,32 @@ function decodeNcAxisOnlineState(buffer: Buffer): NcAxisOnlineState {
     totalOutputPercent: buffer.readDoubleLE(96),
     stateDWord: buffer.readUInt32LE(104),
   };
+}
+
+async function readNcAxisOnlineState(
+  client: Client,
+  indexGroup: number,
+  targetOptions: Partial<AmsAddress> | undefined,
+): Promise<Buffer> {
+  try {
+    return await client.readRaw(
+      indexGroup,
+      NC_AXIS_ONLINE_STATE_OFFSET,
+      NC_AXIS_ONLINE_STATE_SIZE,
+      targetOptions,
+    );
+  } catch (error) {
+    try {
+      return await client.readRaw(
+        indexGroup,
+        NC_AXIS_ONLINE_STATE_OFFSET,
+        NC_AXIS_ONLINE_STATE_LEGACY_SIZE,
+        targetOptions,
+      );
+    } catch {
+      throw error;
+    }
+  }
 }
 
 function ioTypeSize(type: string): number | undefined {
@@ -1290,7 +1318,7 @@ export class AdsService {
       }),
     );
     const [onlineBuffer, errorBuffer, statusBuffers] = await Promise.all([
-      client.readRaw(indexGroup, NC_AXIS_ONLINE_STATE_OFFSET, 112, targetOptions),
+      readNcAxisOnlineState(client, indexGroup, targetOptions),
       client.readRaw(indexGroup, NC_AXIS_ERROR_CODE_OFFSET, 4, targetOptions),
       client
         .readRawMulti(statusCommands, targetOptions)

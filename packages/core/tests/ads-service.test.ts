@@ -33,6 +33,13 @@ const mockState = vi.hoisted(() => ({
     "MAIN.watch": true,
   } as Record<string, unknown>,
   rawValues: new Map<string, Buffer>(),
+  rawReadCalls: [] as Array<{
+    port: number;
+    indexGroup: number;
+    indexOffset: number;
+    size: number;
+  }>,
+  failRawReads: new Set<string>(),
   clientInstances: [] as MockClient[],
   failConnectPorts: new Set<number>(),
   nextNotificationHandle: 100,
@@ -186,6 +193,22 @@ class MockClient extends EventEmitter {
   }
 
   async readRaw(indexGroup: number, indexOffset: number, size: number) {
+    mockState.rawReadCalls.push({
+      port: this.connection.targetAdsPort,
+      indexGroup,
+      indexOffset,
+      size,
+    });
+    if (
+      mockState.failRawReads.has(
+        `${this.connection.targetAdsPort}:${indexGroup}:${indexOffset}:${size}`,
+      )
+    ) {
+      throw new Error(
+        `readRaw failed for ${this.connection.targetAdsPort}:${indexGroup}:${indexOffset}:${size}`,
+      );
+    }
+
     const rawValue = mockState.rawValues.get(
       `${this.connection.targetAdsPort}:${indexGroup}:${indexOffset}`,
     );
@@ -311,8 +334,8 @@ function getMockClientByPort(targetAdsPort: number): MockClient | undefined {
   );
 }
 
-function createNcOnlineStateBuffer() {
-  const buffer = Buffer.alloc(112);
+function createNcOnlineStateBuffer(size = 256) {
+  const buffer = Buffer.alloc(size);
   buffer.writeInt32LE(0, 0);
   buffer.writeDoubleLE(12.5, 8);
   buffer.writeDoubleLE(12.5, 16);
@@ -344,6 +367,8 @@ describe("AdsService", () => {
     mockState.clientInstances.length = 0;
     mockState.failConnectPorts.clear();
     mockState.rawValues.clear();
+    mockState.rawReadCalls.length = 0;
+    mockState.failRawReads.clear();
     mockState.symbols = {
       "MAIN.value": {
         name: "MAIN.value",
@@ -847,6 +872,67 @@ describe("AdsService", () => {
     expect(result.status.ready).toBe(true);
     expect(result.status.referenced).toBe(true);
     expect(result.errorCode).toBe(0);
+    expect(mockState.rawReadCalls).toContainEqual({
+      port: 500,
+      indexGroup: axisIndexGroup,
+      indexOffset: 0,
+      size: 256,
+    });
+  });
+
+  it("falls back to the legacy NC online state size", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const axisIndexGroup = 0x4100 + 1;
+    mockState.failRawReads.add(`500:${axisIndexGroup}:0:256`);
+    mockState.rawValues.set(
+      `500:${axisIndexGroup}:0`,
+      createNcOnlineStateBuffer(112),
+    );
+    mockState.rawValues.set(
+      `500:${axisIndexGroup}:177`,
+      Buffer.from([0, 0, 0, 0]),
+    );
+    for (const offset of [0x82, 0x83, 0x84, 0x8c, 0x8d, 0x8e, 0x8f, 0x90, 0x9a]) {
+      const value = Buffer.alloc(2);
+      value.writeUInt16LE(0, 0);
+      mockState.rawValues.set(`500:${axisIndexGroup}:${offset}`, value);
+    }
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        nc: {
+          targetAdsPort: 500,
+          axes: [{ name: "X", id: 1 }],
+        },
+      },
+    });
+
+    const result = await service.ncReadAxis(1);
+
+    expect(result.online.actualPosition).toBe(12.5);
+    expect(mockState.rawReadCalls.filter((call) => call.indexOffset === 0)).toEqual([
+      {
+        port: 500,
+        indexGroup: axisIndexGroup,
+        indexOffset: 0,
+        size: 256,
+      },
+      {
+        port: 500,
+        indexGroup: axisIndexGroup,
+        indexOffset: 0,
+        size: 112,
+      },
+    ]);
   });
 
   it("reads configured IO data points and groups through raw ADS reads", async () => {
