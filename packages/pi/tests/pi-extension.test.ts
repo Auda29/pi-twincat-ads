@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import piTwinCatAdsExtension from "../src/pi-extension.js";
+import piTwinCatAdsExtension, { formatToolSuccess } from "../src/pi-extension.js";
 
 describe("Pi host extension", () => {
   it("registers NC and IO tools with the actual Pi host adapter", () => {
@@ -34,6 +34,25 @@ describe("Pi host extension", () => {
         "tc_diagnose_errors",
         "tc_diagnose_runtime",
       ]),
+    );
+  });
+
+  it("formats configured NC axes in the Pi host response text", () => {
+    expect(
+      formatToolSuccess("nc_list_axes", {
+        count: 2,
+        axes: [
+          { name: "X1-TRAV", id: 1, targetAdsPort: 500 },
+          {
+            name: "Y1-BAB",
+            id: 2,
+            targetAdsPort: 500,
+            description: "Y axis",
+          },
+        ],
+      }),
+    ).toBe(
+      "Listed 2 configured NC axes: X1-TRAV (id 1, port 500); Y1-BAB (id 2, port 500, Y axis).",
     );
   });
 });

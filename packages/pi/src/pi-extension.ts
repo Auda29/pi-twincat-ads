@@ -204,7 +204,7 @@ function formatTurnContext(context: {
   return lines.join("\n");
 }
 
-function formatToolSuccess(toolName: string, data: unknown): string {
+export function formatToolSuccess(toolName: string, data: unknown): string {
   if (toolName === "plc_read") {
     const result = (data as { result: { name: string; value: unknown; type: string; timestamp: string } }).result;
     return `Read ${result.name} = ${formatValue(result.value)} (${result.type}) @ ${result.timestamp}`;
@@ -274,8 +274,29 @@ function formatToolSuccess(toolName: string, data: unknown): string {
   }
 
   if (toolName === "nc_list_axes") {
-    const result = data as { count: number };
-    return `Listed ${result.count} configured NC axes.`;
+    const result = data as {
+      count: number;
+      axes: Array<{
+        name: string;
+        id: number;
+        targetAdsPort?: number;
+        description?: string;
+      }>;
+    };
+    if (result.axes.length === 0) {
+      return "Listed 0 configured NC axes.";
+    }
+
+    const axes = result.axes
+      .map((axis) => {
+        const port =
+          axis.targetAdsPort === undefined ? "" : `, port ${axis.targetAdsPort}`;
+        const description =
+          axis.description === undefined ? "" : `, ${axis.description}`;
+        return `${axis.name} (id ${axis.id}${port}${description})`;
+      })
+      .join("; ");
+    return `Listed ${result.count} configured NC axes: ${axes}.`;
   }
 
   if (toolName === "nc_read_axis") {

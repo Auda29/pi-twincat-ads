@@ -935,6 +935,52 @@ describe("AdsService", () => {
     ]);
   });
 
+  it("keeps NC axis reads available when the separate error-code offset is unavailable", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const axisIndexGroup = 0x4100 + 1;
+    const onlineState = createNcOnlineStateBuffer();
+    onlineState.writeUInt32LE(1234, 0);
+    mockState.rawValues.set(`500:${axisIndexGroup}:0`, onlineState);
+    mockState.failRawReads.add(`500:${axisIndexGroup}:177:4`);
+    for (const offset of [0x82, 0x83, 0x84, 0x8c, 0x8d, 0x8e, 0x8f, 0x90, 0x9a]) {
+      const value = Buffer.alloc(2);
+      value.writeUInt16LE(0, 0);
+      mockState.rawValues.set(`500:${axisIndexGroup}:${offset}`, value);
+    }
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        nc: {
+          targetAdsPort: 500,
+          axes: [{ name: "X", id: 1 }],
+        },
+      },
+    });
+
+    const axisResult = await service.ncReadAxis("X");
+    expect(axisResult.online.actualPosition).toBe(12.5);
+    expect(axisResult.errorCode).toBe(1234);
+
+    const errorResult = await service.ncReadError("X");
+    expect(errorResult.errorCode).toBe(1234);
+    expect(errorResult.hasError).toBe(true);
+    expect(mockState.rawReadCalls).toContainEqual({
+      port: 500,
+      indexGroup: axisIndexGroup,
+      indexOffset: 177,
+      size: 4,
+    });
+  });
+
   it("reads configured IO data points and groups through raw ADS reads", async () => {
     const { AdsService } = await import("../src/ads-service.js");
 
