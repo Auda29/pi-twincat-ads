@@ -305,10 +305,47 @@ export function formatToolSuccess(toolName: string, data: unknown): string {
         axis: { name: string; id: number };
         online: { actualPosition: number; actualVelocity: number };
         errorCode: number;
+        warnings?: unknown[];
         timestamp: string;
       };
     };
-    return `NC axis ${result.result.axis.name} (id ${result.result.axis.id}) position=${result.result.online.actualPosition}, velocity=${result.result.online.actualVelocity}, error=${result.result.errorCode} @ ${result.result.timestamp}`;
+    const warnings =
+      result.result.warnings === undefined || result.result.warnings.length === 0
+        ? ""
+        : `, warnings=${result.result.warnings.length}`;
+    return `NC axis ${result.result.axis.name} (id ${result.result.axis.id}) position=${result.result.online.actualPosition}, velocity=${result.result.online.actualVelocity}, error=${result.result.errorCode}${warnings} @ ${result.result.timestamp}`;
+  }
+
+  if (toolName === "nc_read_axis_position") {
+    const result = data as {
+      position: {
+        axis: { name: string; id: number };
+        online: { actualPosition: number; actualVelocity: number };
+        timestamp: string;
+      };
+    };
+    return `NC axis ${result.position.axis.name} (id ${result.position.axis.id}) position=${result.position.online.actualPosition}, velocity=${result.position.online.actualVelocity} @ ${result.position.timestamp}`;
+  }
+
+  if (toolName === "nc_read_axis_status") {
+    const result = data as {
+      status: {
+        axis: { name: string; id: number };
+        status: Record<string, boolean>;
+        warnings?: unknown[];
+        timestamp: string;
+      };
+    };
+    const activeFlags = Object.entries(result.status.status)
+      .filter(([, value]) => value)
+      .map(([key]) => key);
+    const status =
+      activeFlags.length === 0 ? "no active flags" : activeFlags.join(", ");
+    const warnings =
+      result.status.warnings === undefined || result.status.warnings.length === 0
+        ? ""
+        : `, warnings=${result.status.warnings.length}`;
+    return `NC axis ${result.status.axis.name} (id ${result.status.axis.id}) status=${status}${warnings} @ ${result.status.timestamp}`;
   }
 
   if (toolName === "nc_read_axis_many") {
@@ -612,7 +649,31 @@ const toolSpecs: ToolSpec[] = [
     name: "nc_read_axis",
     label: "NC Read Axis",
     description:
-      "Read configured NC axis online state, status flags, position, velocity, and error code.",
+      "Read configured NC axis online state, status flags, position, velocity, and error code. Returns available data with warnings when optional status or error fields cannot be read.",
+    parameters: Type.Object(
+      {
+        axis: axisRefSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "nc_read_axis_position",
+    label: "NC Axis Position",
+    description:
+      "Read only the configured NC axis online position and velocity state.",
+    parameters: Type.Object(
+      {
+        axis: axisRefSchema,
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    name: "nc_read_axis_status",
+    label: "NC Axis Status",
+    description:
+      "Read only configured NC axis status flags such as ready, referenced, in-position, and busy.",
     parameters: Type.Object(
       {
         axis: axisRefSchema,

@@ -76,6 +76,40 @@ function createRuntimeStub() {
       axes: [{ name: "X", id: 1, targetAdsPort: 500 }],
     }),
     ncListAxes: () => [{ name: "X", id: 1, targetAdsPort: 500 }],
+    ncReadAxisPosition: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      online: {
+        errorState: 0,
+        actualPosition: 12.5,
+        moduloActualPosition: 12.5,
+        setPosition: 13.5,
+        moduloSetPosition: 13.5,
+        actualVelocity: 2.5,
+        setVelocity: 3.5,
+        velocityOverride: 1000000,
+        lagErrorPosition: 0,
+        controllerOutputPercent: 0,
+        totalOutputPercent: 0,
+        stateDWord: 0,
+      },
+    }),
+    ncReadAxisStatus: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      status: {
+        ready: true,
+        referenced: true,
+        protectedMode: false,
+        logicalStandstill: false,
+        referencing: false,
+        inPositionWindow: true,
+        atTargetPosition: false,
+        constantVelocity: true,
+        busy: false,
+      },
+      warnings: [],
+    }),
     ncReadAxis: async ({ axis }: { axis: string | number }) => ({
       axis: { name: String(axis), id: 1, targetAdsPort: 500 },
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -105,6 +139,7 @@ function createRuntimeStub() {
         busy: false,
       },
       errorCode: 0,
+      warnings: [],
     }),
     ncReadAxisMany: async ({ axes }: { axes: Array<string | number> }) => ({
       results: axes.map((axis) => ({
@@ -136,6 +171,7 @@ function createRuntimeStub() {
           busy: false,
         },
         errorCode: 0,
+        warnings: [],
       })),
       count: axes.length,
     }),
@@ -144,6 +180,7 @@ function createRuntimeStub() {
       timestamp: "2026-01-01T00:00:00.000Z",
       errorCode: 0,
       hasError: false,
+      warnings: [],
     }),
     ioListGroups: () => ({
       groups: [{ name: "inputs", dataPoints: ["Input1"], count: 1 }],
@@ -565,8 +602,14 @@ describe("tools", () => {
     const tools = createToolDefinitions();
     const listTool = tools.find((entry) => entry.name === "nc_list_axes");
     const readTool = tools.find((entry) => entry.name === "nc_read_axis");
+    const positionTool = tools.find(
+      (entry) => entry.name === "nc_read_axis_position",
+    );
+    const statusTool = tools.find((entry) => entry.name === "nc_read_axis_status");
     expect(listTool).toBeDefined();
     expect(readTool).toBeDefined();
+    expect(positionTool).toBeDefined();
+    expect(statusTool).toBeDefined();
 
     const listResult = await listTool!.execute(
       {},
@@ -584,6 +627,25 @@ describe("tools", () => {
     expect(readResult.ok).toBe(true);
     if (readResult.ok) {
       expect(readResult.data.result.online.actualPosition).toBe(12.5);
+      expect(readResult.data.result.warnings).toEqual([]);
+    }
+
+    const positionResult = await positionTool!.execute(
+      { axis: "X" },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(positionResult.ok).toBe(true);
+    if (positionResult.ok) {
+      expect(positionResult.data.position.online.actualPosition).toBe(12.5);
+    }
+
+    const statusResult = await statusTool!.execute(
+      { axis: "X" },
+      { runtime: createRuntimeStub() as never },
+    );
+    expect(statusResult.ok).toBe(true);
+    if (statusResult.ok) {
+      expect(statusResult.data.status.status.ready).toBe(true);
     }
   });
 

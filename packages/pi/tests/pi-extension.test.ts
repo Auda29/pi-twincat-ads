@@ -21,6 +21,8 @@ describe("Pi host extension", () => {
         "nc_state",
         "nc_list_axes",
         "nc_read_axis",
+        "nc_read_axis_position",
+        "nc_read_axis_status",
         "nc_read_axis_many",
         "nc_read_error",
         "io_list_groups",

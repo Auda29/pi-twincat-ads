@@ -311,12 +311,31 @@ export interface NcAxisStatusFlags {
   readonly busy: boolean;
 }
 
+export interface NcAxisReadWarning {
+  readonly section: "error" | "status";
+  readonly message: string;
+}
+
+export interface NcAxisPositionResult {
+  readonly axis: NcAxisSummary;
+  readonly timestamp: string;
+  readonly online: NcAxisOnlineState;
+}
+
+export interface NcAxisStatusResult {
+  readonly axis: NcAxisSummary;
+  readonly timestamp: string;
+  readonly status: NcAxisStatusFlags;
+  readonly warnings: NcAxisReadWarning[];
+}
+
 export interface NcAxisReadResult {
   readonly axis: NcAxisSummary;
   readonly timestamp: string;
   readonly online: NcAxisOnlineState;
   readonly status: NcAxisStatusFlags;
   readonly errorCode: number;
+  readonly warnings: NcAxisReadWarning[];
 }
 
 export interface NcAxisReadManyResult {
@@ -329,6 +348,7 @@ export interface NcAxisErrorResult {
   readonly timestamp: string;
   readonly errorCode: number;
   readonly hasError: boolean;
+  readonly warnings: NcAxisReadWarning[];
 }
 
 export interface IoDataPointSummary {
@@ -595,6 +615,8 @@ export interface TwinCatAdsService {
   readGroup(group: string): Promise<PlcReadGroupResult>;
   ncState(): Promise<NcStateResult>;
   ncListAxes(): NcAxisSummary[];
+  ncReadAxisPosition(axis: string | number): Promise<NcAxisPositionResult>;
+  ncReadAxisStatus(axis: string | number): Promise<NcAxisStatusResult>;
   ncReadAxis(axis: string | number): Promise<NcAxisReadResult>;
   ncReadAxisMany(axes: readonly (string | number)[]): Promise<NcAxisReadManyResult>;
   ncReadError(axis: string | number): Promise<NcAxisErrorResult>;
@@ -977,7 +999,7 @@ async function readNcAxisErrorCode(
   indexGroup: number,
   targetOptions: Partial<AmsAddress> | undefined,
   onlineStateBuffer?: Buffer,
-): Promise<number> {
+): Promise<{ errorCode: number; warnings: NcAxisReadWarning[] }> {
   try {
     const buffer = await client.readRaw(
       indexGroup,
@@ -985,10 +1007,19 @@ async function readNcAxisErrorCode(
       4,
       targetOptions,
     );
-    return buffer.readUInt32LE(0);
+    return { errorCode: buffer.readUInt32LE(0), warnings: [] };
   } catch {
+    const warning = {
+      section: "error",
+      message:
+        "NC axis error-code offset 177 could not be read; using online error state as fallback.",
+    } satisfies NcAxisReadWarning;
+
     if (onlineStateBuffer !== undefined) {
-      return onlineStateBuffer.readUInt32LE(0);
+      return {
+        errorCode: onlineStateBuffer.readUInt32LE(0),
+        warnings: [warning],
+      };
     }
 
     const buffer = await readNcAxisOnlineState(
@@ -996,7 +1027,67 @@ async function readNcAxisErrorCode(
       indexGroup,
       targetOptions,
     );
-    return buffer.readUInt32LE(0);
+    return {
+      errorCode: buffer.readUInt32LE(0),
+      warnings: [warning],
+    };
+  }
+}
+
+function defaultNcAxisStatusFlags(): NcAxisStatusFlags {
+  return Object.fromEntries(
+    Object.keys(NC_AXIS_STATUS_OFFSETS).map((key) => [key, false]),
+  ) as unknown as NcAxisStatusFlags;
+}
+
+async function readNcAxisStatusFlags(
+  client: Client,
+  indexGroup: number,
+  targetOptions: Partial<AmsAddress> | undefined,
+): Promise<{ status: NcAxisStatusFlags; warnings: NcAxisReadWarning[] }> {
+  const statusKeys = Object.keys(
+    NC_AXIS_STATUS_OFFSETS,
+  ) as Array<keyof NcAxisStatusFlags>;
+  const statusCommands = Object.values(NC_AXIS_STATUS_OFFSETS).map(
+    (indexOffset): ReadRawMultiCommand => ({
+      indexGroup,
+      indexOffset,
+      size: 2,
+    }),
+  );
+
+  try {
+    const results = await client.readRawMulti(statusCommands, targetOptions);
+    const warnings: NcAxisReadWarning[] = [];
+    const status = Object.fromEntries(
+      statusKeys.map((key, index) => {
+        const result = results[index];
+        const indexOffset = statusCommands[index]?.indexOffset;
+        const readable = result?.success === true && result.value !== undefined;
+        if (!readable) {
+          warnings.push({
+            section: "status",
+            message: `NC axis status flag ${String(key)} at offset ${indexOffset ?? "unknown"} could not be read.`,
+          });
+        }
+        const value =
+          readable && result.value !== undefined
+            ? readUInt16Flag(result.value)
+            : false;
+        return [key, value];
+      }),
+    ) as unknown as NcAxisStatusFlags;
+    return { status, warnings };
+  } catch {
+    return {
+      status: defaultNcAxisStatusFlags(),
+      warnings: [
+        {
+          section: "status",
+          message: "NC axis status flags could not be read.",
+        },
+      ],
+    };
   }
 }
 
@@ -1331,6 +1422,43 @@ export class AdsService {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
+  async ncReadAxisPosition(
+    axis: string | number,
+  ): Promise<NcAxisPositionResult> {
+    const axisConfig = this.#resolveNcAxis(axis);
+    const axisSummary = this.#toNcAxisSummary(axisConfig);
+    const client = await this.#connectServiceClient("nc");
+    const onlineBuffer = await readNcAxisOnlineState(
+      client,
+      axisStateIndexGroup(axisConfig.id),
+      adsTargetOptions(axisConfig.targetAdsPort),
+    );
+
+    return {
+      axis: axisSummary,
+      timestamp: new Date().toISOString(),
+      online: decodeNcAxisOnlineState(onlineBuffer),
+    };
+  }
+
+  async ncReadAxisStatus(axis: string | number): Promise<NcAxisStatusResult> {
+    const axisConfig = this.#resolveNcAxis(axis);
+    const axisSummary = this.#toNcAxisSummary(axisConfig);
+    const client = await this.#connectServiceClient("nc");
+    const { status, warnings } = await readNcAxisStatusFlags(
+      client,
+      axisStateIndexGroup(axisConfig.id),
+      adsTargetOptions(axisConfig.targetAdsPort),
+    );
+
+    return {
+      axis: axisSummary,
+      timestamp: new Date().toISOString(),
+      status,
+      warnings,
+    };
+  }
+
   async ncReadAxis(axis: string | number): Promise<NcAxisReadResult> {
     const axisConfig = this.#resolveNcAxis(axis);
     const axisSummary = this.#toNcAxisSummary(axisConfig);
@@ -1338,47 +1466,25 @@ export class AdsService {
     const targetOptions = adsTargetOptions(axisConfig.targetAdsPort);
     const indexGroup = axisStateIndexGroup(axisConfig.id);
 
-    const statusCommands = Object.values(NC_AXIS_STATUS_OFFSETS).map(
-      (indexOffset): ReadRawMultiCommand => ({
-        indexGroup,
-        indexOffset,
-        size: 2,
-      }),
-    );
     const onlineStatePromise = readNcAxisOnlineState(
       client,
       indexGroup,
       targetOptions,
     );
-    const statusBuffersPromise = client
-      .readRawMulti(statusCommands, targetOptions)
-      .then((results) =>
-        results.map((result, index) =>
-          assertRawReadSuccess(
-            result,
-            `NC axis ${axisSummary.name} status field ${index}`,
-          ),
-        ),
-      );
+    const statusPromise = readNcAxisStatusFlags(client, indexGroup, targetOptions);
     const onlineBuffer = await onlineStatePromise;
-    const [errorCode, statusBuffers] = await Promise.all([
+    const [errorResult, statusResult] = await Promise.all([
       readNcAxisErrorCode(client, indexGroup, targetOptions, onlineBuffer),
-      statusBuffersPromise,
+      statusPromise,
     ]);
-
-    const statusValues = statusBuffers.map(readUInt16Flag);
-    const statusKeys = Object.keys(
-      NC_AXIS_STATUS_OFFSETS,
-    ) as Array<keyof NcAxisStatusFlags>;
 
     return {
       axis: axisSummary,
       timestamp: new Date().toISOString(),
       online: decodeNcAxisOnlineState(onlineBuffer),
-      status: Object.fromEntries(
-        statusKeys.map((key, index) => [key, statusValues[index] ?? false]),
-      ) as unknown as NcAxisStatusFlags,
-      errorCode,
+      status: statusResult.status,
+      errorCode: errorResult.errorCode,
+      warnings: [...errorResult.warnings, ...statusResult.warnings],
     };
   }
 
@@ -1399,7 +1505,7 @@ export class AdsService {
     const axisConfig = this.#resolveNcAxis(axis);
     const axisSummary = this.#toNcAxisSummary(axisConfig);
     const client = await this.#connectServiceClient("nc");
-    const errorCode = await readNcAxisErrorCode(
+    const { errorCode, warnings } = await readNcAxisErrorCode(
       client,
       axisStateIndexGroup(axisConfig.id),
       adsTargetOptions(axisConfig.targetAdsPort),
@@ -1410,6 +1516,7 @@ export class AdsService {
       timestamp: new Date().toISOString(),
       errorCode,
       hasError: errorCode !== 0,
+      warnings,
     };
   }
 

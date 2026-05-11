@@ -7,8 +7,10 @@ import {
   type IoReadManyResult,
   type IoReadResult,
   type NcAxisErrorResult,
+  type NcAxisPositionResult,
   type NcAxisReadManyResult,
   type NcAxisReadResult,
+  type NcAxisStatusResult,
   type NcAxisSummary,
   type NcStateResult,
   type PlcReadGroupResult,
@@ -412,6 +414,12 @@ export interface NcListAxesToolOutput {
 export interface NcReadAxisToolOutput {
   readonly result: NcAxisReadResult;
 }
+export interface NcReadAxisPositionToolOutput {
+  readonly position: NcAxisPositionResult;
+}
+export interface NcReadAxisStatusToolOutput {
+  readonly status: NcAxisStatusResult;
+}
 export interface NcReadAxisManyToolOutput extends NcAxisReadManyResult {}
 export interface NcReadErrorToolOutput {
   readonly error: NcAxisErrorResult;
@@ -536,6 +544,14 @@ export function createToolDefinitions(): Array<
   | ToolDefinition<z.infer<typeof readManyInputSchema>, PlcReadManyToolOutput>
   | ToolDefinition<z.infer<typeof readGroupInputSchema>, PlcReadGroupToolOutput>
   | ToolDefinition<z.infer<typeof ncReadAxisInputSchema>, NcReadAxisToolOutput>
+  | ToolDefinition<
+      z.infer<typeof ncReadAxisInputSchema>,
+      NcReadAxisPositionToolOutput
+    >
+  | ToolDefinition<
+      z.infer<typeof ncReadAxisInputSchema>,
+      NcReadAxisStatusToolOutput
+    >
   | ToolDefinition<
       z.infer<typeof ncReadAxisManyInputSchema>,
       NcReadAxisManyToolOutput
@@ -670,10 +686,28 @@ export function createToolDefinitions(): Array<
     createToolDefinition({
       name: "nc_read_axis",
       description:
-        "Read configured NC axis online state, status flags, position, velocity, and error code.",
+        "Read configured NC axis online state, status flags, position, velocity, and error code. Returns available data with warnings when optional status or error fields cannot be read.",
       inputSchema: ncReadAxisInputSchema,
       handler: async (input, context) => ({
         result: await context.runtime.ncReadAxis(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "nc_read_axis_position",
+      description:
+        "Read only the configured NC axis online position and velocity state.",
+      inputSchema: ncReadAxisInputSchema,
+      handler: async (input, context) => ({
+        position: await context.runtime.ncReadAxisPosition(input),
+      }),
+    }),
+    createToolDefinition({
+      name: "nc_read_axis_status",
+      description:
+        "Read only configured NC axis status flags such as ready, referenced, in-position, and busy.",
+      inputSchema: ncReadAxisInputSchema,
+      handler: async (input, context) => ({
+        status: await context.runtime.ncReadAxisStatus(input),
       }),
     }),
     createToolDefinition({

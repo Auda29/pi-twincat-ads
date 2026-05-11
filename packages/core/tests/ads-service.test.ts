@@ -165,8 +165,22 @@ class MockClient extends EventEmitter {
     };
   }
 
-  async readRawMulti(commands: Array<{ indexGroup: number; indexOffset: number }>) {
+  async readRawMulti(
+    commands: Array<{ indexGroup: number; indexOffset: number; size?: number }>,
+  ) {
     return commands.map((command) => {
+      const size = "size" in command && typeof command.size === "number" ? command.size : 0;
+      if (
+        mockState.failRawReads.has(
+          `${this.connection.targetAdsPort}:${command.indexGroup}:${command.indexOffset}:${size}`,
+        )
+      ) {
+        return {
+          success: false,
+          command,
+        };
+      }
+
       const rawValue = mockState.rawValues.get(
         `${this.connection.targetAdsPort}:${command.indexGroup}:${command.indexOffset}`,
       );
@@ -872,6 +886,15 @@ describe("AdsService", () => {
     expect(result.status.ready).toBe(true);
     expect(result.status.referenced).toBe(true);
     expect(result.errorCode).toBe(0);
+    expect(result.warnings).toEqual([]);
+
+    const position = await service.ncReadAxisPosition("X");
+    expect(position.online.actualPosition).toBe(12.5);
+
+    const status = await service.ncReadAxisStatus("X");
+    expect(status.status.ready).toBe(true);
+    expect(status.status.referenced).toBe(true);
+    expect(status.warnings).toEqual([]);
     expect(mockState.rawReadCalls).toContainEqual({
       port: 500,
       indexGroup: axisIndexGroup,
@@ -969,15 +992,82 @@ describe("AdsService", () => {
     const axisResult = await service.ncReadAxis("X");
     expect(axisResult.online.actualPosition).toBe(12.5);
     expect(axisResult.errorCode).toBe(1234);
+    expect(axisResult.warnings).toEqual([
+      {
+        section: "error",
+        message:
+          "NC axis error-code offset 177 could not be read; using online error state as fallback.",
+      },
+    ]);
 
     const errorResult = await service.ncReadError("X");
     expect(errorResult.errorCode).toBe(1234);
     expect(errorResult.hasError).toBe(true);
+    expect(errorResult.warnings).toEqual([
+      {
+        section: "error",
+        message:
+          "NC axis error-code offset 177 could not be read; using online error state as fallback.",
+      },
+    ]);
     expect(mockState.rawReadCalls).toContainEqual({
       port: 500,
       indexGroup: axisIndexGroup,
       indexOffset: 177,
       size: 4,
+    });
+  });
+
+  it("keeps NC axis positions available when status flag reads are unavailable", async () => {
+    const { AdsService } = await import("../src/ads-service.js");
+
+    const axisIndexGroup = 0x4100 + 1;
+    mockState.rawValues.set(
+      `500:${axisIndexGroup}:0`,
+      createNcOnlineStateBuffer(),
+    );
+    mockState.rawValues.set(
+      `500:${axisIndexGroup}:177`,
+      Buffer.from([0, 0, 0, 0]),
+    );
+    for (const offset of [0x82, 0x83, 0x84, 0x8c, 0x8d, 0x8e, 0x8f, 0x90, 0x9a]) {
+      const value = Buffer.alloc(2);
+      value.writeUInt16LE(0, 0);
+      mockState.rawValues.set(`500:${axisIndexGroup}:${offset}`, value);
+    }
+    mockState.failRawReads.add(`500:${axisIndexGroup}:130:2`);
+
+    const service = new AdsService({
+      connectionMode: "router",
+      targetAmsNetId: "192.168.1.120.1.1",
+      targetAdsPort: 851,
+      readOnly: true,
+      writeAllowlist: [],
+      contextSnapshotSymbols: [],
+      notificationCycleTimeMs: 250,
+      maxNotifications: 128,
+      services: {
+        nc: {
+          targetAdsPort: 500,
+          axes: [{ name: "X", id: 1 }],
+        },
+      },
+    });
+
+    const result = await service.ncReadAxis("X");
+
+    expect(result.online.actualPosition).toBe(12.5);
+    expect(result.status.ready).toBe(false);
+    expect(result.warnings).toContainEqual({
+      section: "status",
+      message: "NC axis status flag ready at offset 130 could not be read.",
+    });
+
+    const status = await service.ncReadAxisStatus("X");
+    expect(status.status.ready).toBe(false);
+    expect(status.warnings).toContainEqual({
+      section: "status",
+      message: "NC axis status flag ready at offset 130 could not be read.",
     });
   });
 

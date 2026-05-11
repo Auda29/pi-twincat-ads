@@ -83,6 +83,40 @@ function createRuntimeStub(
       axes: [{ name: "X", id: 1, targetAdsPort: 500 }],
     }),
     ncListAxes: () => [{ name: "X", id: 1, targetAdsPort: 500 }],
+    ncReadAxisPosition: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      online: {
+        errorState: 0,
+        actualPosition: 12.5,
+        moduloActualPosition: 12.5,
+        setPosition: 13.5,
+        moduloSetPosition: 13.5,
+        actualVelocity: 2.5,
+        setVelocity: 3.5,
+        velocityOverride: 1000000,
+        lagErrorPosition: 0,
+        controllerOutputPercent: 0,
+        totalOutputPercent: 0,
+        stateDWord: 0,
+      },
+    }),
+    ncReadAxisStatus: async ({ axis }: { axis: string | number }) => ({
+      axis: { name: String(axis), id: 1, targetAdsPort: 500 },
+      timestamp: "2026-01-01T00:00:00.000Z",
+      status: {
+        ready: true,
+        referenced: true,
+        protectedMode: false,
+        logicalStandstill: false,
+        referencing: false,
+        inPositionWindow: true,
+        atTargetPosition: false,
+        constantVelocity: true,
+        busy: false,
+      },
+      warnings: [],
+    }),
     ncReadAxis: async ({ axis }: { axis: string | number }) => ({
       axis: { name: String(axis), id: 1, targetAdsPort: 500 },
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -112,6 +146,7 @@ function createRuntimeStub(
         busy: false,
       },
       errorCode: 0,
+      warnings: [],
     }),
     ncReadAxisMany: async ({ axes }: { axes: Array<string | number> }) => ({
       results: axes.map((axis) => ({
@@ -143,6 +178,7 @@ function createRuntimeStub(
           busy: false,
         },
         errorCode: 0,
+        warnings: [],
       })),
       count: axes.length,
     }),
@@ -151,6 +187,7 @@ function createRuntimeStub(
       timestamp: "2026-01-01T00:00:00.000Z",
       errorCode: 0,
       hasError: false,
+      warnings: [],
     }),
     ioListGroups: () => ({
       groups: [{ name: "inputs", dataPoints: ["Input1"], count: 1 }],
@@ -470,6 +507,8 @@ describe("mcp tool definitions", () => {
       "nc_state",
       "nc_list_axes",
       "nc_read_axis",
+      "nc_read_axis_position",
+      "nc_read_axis_status",
       "nc_read_axis_many",
       "nc_read_error",
       "io_list_groups",
@@ -583,6 +622,30 @@ describe("mcp tool definitions", () => {
       result: {
         axis: { name: "X" },
         online: { actualPosition: 12.5 },
+        warnings: [],
+      },
+    });
+
+    const ncPosition = await callMcpTool(tools, "nc_read_axis_position", {
+      axis: "X",
+    });
+    expect(ncPosition.isError).toBeUndefined();
+    expect(ncPosition.structuredContent).toMatchObject({
+      position: {
+        axis: { name: "X" },
+        online: { actualPosition: 12.5 },
+      },
+    });
+
+    const ncStatus = await callMcpTool(tools, "nc_read_axis_status", {
+      axis: "X",
+    });
+    expect(ncStatus.isError).toBeUndefined();
+    expect(ncStatus.structuredContent).toMatchObject({
+      status: {
+        axis: { name: "X" },
+        status: { ready: true, referenced: true },
+        warnings: [],
       },
     });
 

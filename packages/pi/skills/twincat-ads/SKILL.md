@@ -4,8 +4,9 @@ description: >-
   TwinCAT ADS via pi-twincat-ads (plc_state, plc_list_symbols,
   plc_describe_symbol, plc_read, plc_read_many, plc_list_groups,
   plc_read_group, plc_write, plc_watch, plc_wait_until, nc_state,
-  nc_list_axes, nc_read_axis, nc_read_axis_many, nc_read_error, io_list_groups,
-  io_read, io_read_many, io_read_group, tc_state, tc_event_list,
+  nc_list_axes, nc_read_axis_position, nc_read_axis_status, nc_read_axis,
+  nc_read_axis_many, nc_read_error, io_list_groups, io_read, io_read_many,
+  io_read_group, tc_state, tc_event_list,
   tc_runtime_error_list, tc_log_read, tc_diagnose_errors,
   tc_diagnose_runtime). Use when inspecting TwinCAT PLC symbols, NC axis state,
   IO data points, runtime state, runtime diagnostics, configured groups, or ADS
@@ -22,7 +23,7 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 2. Use `plc_list_symbols` if the exact symbol path is not certain.
 3. Use `plc_describe_symbol` when type, size, array bounds, or struct members matter.
 4. Use `plc_list_groups` and `plc_read_group` when the config defines reusable PLC symbol groups.
-5. Use `nc_state`, `nc_list_axes`, `nc_read_axis`, or `nc_read_error` when the task concerns NC axes, motion state, position, velocity, or NC errors.
+5. Use `nc_state`, `nc_list_axes`, `nc_read_axis_position`, `nc_read_axis_status`, `nc_read_axis`, or `nc_read_error` when the task concerns NC axes, motion state, position, velocity, status flags, or NC errors.
 6. Use `io_list_groups`, `io_read`, `io_read_many`, or `io_read_group` when the task concerns configured IO process data, sensors, valves, safety inputs, or outputs.
 7. Use `tc_state`, `tc_event_list`, `tc_runtime_error_list`, or `tc_log_read` when the task concerns a specific TwinCAT-wide runtime diagnostic surface rather than one PLC symbol, NC axis, or IO data point.
 8. Use `tc_diagnose_errors` or `tc_diagnose_runtime` for bounded first-pass triage when the user asks for a compact error or runtime health overview.
@@ -78,7 +79,9 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 - NC access is read-only in this package.
 - Use `nc_state` to verify the configured NC ADS service state before relying on axis reads.
 - Use `nc_list_axes` to inspect configured axes. Do this before `nc_read_axis` unless the user or config context already gives an exact axis name or ID.
-- Use `nc_read_axis` for one configured axis when you need position, velocity, status flags, state double word, and error code.
+- Use `nc_read_axis_position` for one configured axis when you only need position, velocity, state double word, or online-state values.
+- Use `nc_read_axis_status` for one configured axis when you only need flags such as ready, referenced, in-position, or busy.
+- Use `nc_read_axis` as a best-effort aggregate when you need position, velocity, status flags, state double word, and error code together. If optional status or error fields cannot be read, inspect its `warnings` and still use available online-state values.
 - Use `nc_read_axis_many` when comparing several configured axes.
 - Use `nc_read_error` when the task is focused on an NC or axis error.
 - NC axes must be configured under `services.nc.axes` with at least `name` and `id`. Optional fields are `targetAdsPort` and `description`.

@@ -6,8 +6,10 @@ import type {
   IoReadManyResult,
   IoReadResult,
   NcAxisErrorResult,
+  NcAxisPositionResult,
   NcAxisReadManyResult,
   NcAxisReadResult,
+  NcAxisStatusResult,
   NcAxisSummary,
   NcStateResult,
   PlcWriteAccessResult,
@@ -121,6 +123,8 @@ export interface TwinCatAdsOperations {
   readGroup(input: ReadGroupInput): Promise<PlcReadGroupResult>;
   ncState(): Promise<NcStateResult>;
   ncListAxes(): NcAxisSummary[];
+  ncReadAxisPosition(input: AxisInput): Promise<NcAxisPositionResult>;
+  ncReadAxisStatus(input: AxisInput): Promise<NcAxisStatusResult>;
   ncReadAxis(input: AxisInput): Promise<NcAxisReadResult>;
   ncReadAxisMany(input: ReadAxisManyInput): Promise<NcAxisReadManyResult>;
   ncReadError(input: AxisInput): Promise<NcAxisErrorResult>;
@@ -178,6 +182,8 @@ export function createTwinCatAdsRuntime(
     readGroup: async (input) => service.readGroup(input.group),
     ncState: async () => service.ncState(),
     ncListAxes: () => service.ncListAxes(),
+    ncReadAxisPosition: async (input) => service.ncReadAxisPosition(input.axis),
+    ncReadAxisStatus: async (input) => service.ncReadAxisStatus(input.axis),
     ncReadAxis: async (input) => service.ncReadAxis(input.axis),
     ncReadAxisMany: async (input) => service.ncReadAxisMany(input.axes),
     ncReadError: async (input) => service.ncReadError(input.axis),

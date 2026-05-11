@@ -537,11 +537,33 @@ export function createMcpToolDefinitions(
       name: "nc_read_axis",
       title: "NC Read Axis",
       description:
-        "Read configured NC axis online state, status flags, position, velocity, and error code.",
+        "Read configured NC axis online state, status flags, position, velocity, and error code. Returns available data with warnings when optional status or error fields cannot be read.",
       inputSchema: ncReadAxisInputSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
       execute: async (input: z.infer<typeof ncReadAxisInputSchema>) => ({
         result: await runtime.ncReadAxis(input),
+      }),
+    },
+    {
+      name: "nc_read_axis_position",
+      title: "NC Read Axis Position",
+      description:
+        "Read only the configured NC axis online position and velocity state.",
+      inputSchema: ncReadAxisInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ncReadAxisInputSchema>) => ({
+        position: await runtime.ncReadAxisPosition(input),
+      }),
+    },
+    {
+      name: "nc_read_axis_status",
+      title: "NC Read Axis Status",
+      description:
+        "Read only configured NC axis status flags such as ready, referenced, in-position, and busy.",
+      inputSchema: ncReadAxisInputSchema,
+      annotations: { readOnlyHint: true, openWorldHint: true },
+      execute: async (input: z.infer<typeof ncReadAxisInputSchema>) => ({
+        status: await runtime.ncReadAxisStatus(input),
       }),
     },
     {
