@@ -159,7 +159,8 @@ class RuntimeDiagnosticUnavailableError extends Error {}
 
 const WINDOWS_EVENT_LOG_SCRIPT = `
 $ErrorActionPreference = "Stop"
-$params = $args[0] | ConvertFrom-Json
+$paramsJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($args[0]))
+$params = $paramsJson | ConvertFrom-Json
 $filter = @{ LogName = [string]$params.logName }
 if ($null -ne $params.since -and [string]$params.since -ne "") {
   $filter.StartTime = [datetime]::Parse([string]$params.since, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -603,14 +604,18 @@ async function runPowerShellScript(
   payload: unknown,
   timeoutMs: number,
 ): Promise<string> {
+  const encodedScript = Buffer.from(script, "utf16le").toString("base64");
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64",
+  );
   const args = [
     "-NoProfile",
     "-NonInteractive",
     "-ExecutionPolicy",
     "Bypass",
-    "-Command",
-    script,
-    JSON.stringify(payload),
+    "-EncodedCommand",
+    encodedScript,
+    encodedPayload,
   ];
   const commands = ["pwsh.exe", "powershell.exe"];
   let lastError: unknown;

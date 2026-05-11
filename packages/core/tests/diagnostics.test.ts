@@ -89,6 +89,10 @@ describe("RuntimeDiagnostics", () => {
     const log = await diagnostics.readLog({ source: "logs", tailLines: 1 });
 
     expect(commands[0]?.command).toBe("pwsh.exe");
+    expect(commands[0]?.args).toContain("-EncodedCommand");
+    expect(commands[0]?.args.some((arg) => arg.includes('"logName"'))).toBe(
+      false,
+    );
     expect(events.available).toBe(true);
     expect(events.events[0]).toMatchObject({
       source: "TcSysSrv",
@@ -159,7 +163,11 @@ describe("RuntimeDiagnostics", () => {
         platform: "win32",
         commandRunner: {
           async run(_command, args) {
-            payload = JSON.parse(String(args[args.length - 1])) as {
+            payload = JSON.parse(
+              Buffer.from(String(args[args.length - 1]), "base64").toString(
+                "utf8",
+              ),
+            ) as {
               levels?: number[];
             };
             return {
