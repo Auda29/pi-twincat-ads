@@ -18,6 +18,21 @@ The package manifest registers:
 - extension entry: `./dist/pi-extension.js`
 - skill directory: `./skills`
 
+## Bundled Skills
+
+The package ships two Pi skills:
+
+- `twincat-ads`: Pi-specific Runtime/ADS tool guidance for PLC, NC, IO, watches,
+  write gates, and TwinCAT runtime diagnostics.
+- `twincat-xae-project-guidelines`: agent-neutral guidance for offline TwinCAT
+  XAE/Visual Studio project-file work, including PLC project XML, POUs, GVLs,
+  DUTs, tasks, I/O devices, boxes, and terminals.
+
+The XAE skill source lives centrally under
+`packages/skills/twincat-xae-project-guidelines`. It is copied into this
+package by the Pi `prepack` lifecycle and removed again by `postpack`, so npm
+artifacts contain the skill without maintaining a second manual copy.
+
 ## Configuration
 
 The Pi adapter accepts configuration through:
@@ -105,6 +120,8 @@ NC read-only:
 
 - `nc_state`
 - `nc_list_axes`
+- `nc_read_axis_position`
+- `nc_read_axis_status`
 - `nc_read_axis`
 - `nc_read_axis_many`
 - `nc_read_error`
@@ -205,10 +222,15 @@ from `twincat-mcp-core`.
 ## Development
 
 ```bash
+npm run sync:skills -w pi-twincat-ads
 npm run test:pi
 npm run build
 npm run pack:pi
 ```
+
+`npm run pack:pi` runs the Pi package `prepack`/`postpack` hooks and verifies
+that shared skills are present in the package tarball while keeping the
+repository source of truth under `packages/skills`.
 
 Live PLC smoke-test details are documented in the repository under
 `docs/local-dev-test.md` and `docs/manual-smoke-test.md`.

@@ -17,6 +17,11 @@ description: >-
 
 Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime values over ADS, or safely manipulate explicitly allowed PLC symbols.
 
+For offline TwinCAT XAE or Visual Studio project-file work, use the
+`twincat-xae-project-guidelines` skill instead. Keep runtime ADS reads,
+watches, waits, and explicitly allowed PLC writes separate from project-tree,
+POU, GVL, DUT, task, I/O topology, build, and XAE editing work.
+
 ## Recommended workflow
 
 1. Start with `plc_state`.
@@ -153,6 +158,10 @@ Use this skill when the agent needs to inspect TwinCAT PLC, NC, or IO runtime va
 - The default local source uses the Windows `Application` Event Log filtered for TwinCAT/Beckhoff provider names when available.
 - If a diagnostic result has `available=false`, report the capability reason instead of treating it as a PLC failure.
 - Do not use these runtime diagnostic tools for XAE build output, Engineering error lists, or Visual Studio output windows; those belong to the later Engineering phase.
+- When the user asks to edit or review TwinCAT project files, POUs, GVLs, DUTs,
+  tasks, I/O devices, boxes, or terminals, switch to
+  `twincat-xae-project-guidelines` for the project-file workflow and use ADS
+  tools only for separate runtime observations.
 
 ### Finding symbol paths
 
