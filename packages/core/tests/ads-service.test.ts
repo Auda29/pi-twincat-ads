@@ -422,6 +422,11 @@ describe("AdsService", () => {
       500,
       300,
     ]);
+    expect(mockState.clientInstances.map((client) => client.settings.rawClient)).toEqual([
+      undefined,
+      true,
+      true,
+    ]);
     expect(service.listServices()).toMatchObject([
       { name: "plc", targetAdsPort: 852, connected: false },
       { name: "nc", targetAdsPort: 500, connected: false },

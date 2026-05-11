@@ -682,6 +682,7 @@ function completeRuntimeConfig(
 function toAdsClientSettings(
   config: ExtensionRuntimeConfig,
   targetAdsPort = config.targetAdsPort,
+  options: { readonly rawClient?: boolean } = {},
 ): AdsClientSettings {
   if (config.connectionMode === "direct") {
     const settings: AdsClientSettings = {
@@ -689,6 +690,10 @@ function toAdsClientSettings(
       targetAdsPort,
       autoReconnect: true,
     };
+
+    if (options.rawClient === true) {
+      settings.rawClient = true;
+    }
 
     if (config.routerAddress !== undefined) {
       settings.routerAddress = config.routerAddress;
@@ -709,11 +714,17 @@ function toAdsClientSettings(
     return settings;
   }
 
-  return {
+  const settings: AdsClientSettings = {
     targetAmsNetId: config.targetAmsNetId,
     targetAdsPort,
     autoReconnect: true,
   };
+
+  if (options.rawClient === true) {
+    settings.rawClient = true;
+  }
+
+  return settings;
 }
 
 function createServiceClients(
@@ -726,11 +737,19 @@ function createServiceClients(
     ],
     [
       "nc",
-      new Client(toAdsClientSettings(config, config.services.nc.targetAdsPort)),
+      new Client(
+        toAdsClientSettings(config, config.services.nc.targetAdsPort, {
+          rawClient: true,
+        }),
+      ),
     ],
     [
       "io",
-      new Client(toAdsClientSettings(config, config.services.io.targetAdsPort)),
+      new Client(
+        toAdsClientSettings(config, config.services.io.targetAdsPort, {
+          rawClient: true,
+        }),
+      ),
     ],
   ]);
 }
