@@ -171,6 +171,54 @@ if ($null -ne $params.until -and [string]$params.until -ne "") {
 if ($null -ne $params.ids -and @($params.ids).Count -gt 0) {
   $filter.Id = @($params.ids)
 }
+$providerFilters = @()
+if ($null -ne $params.providerNames) {
+  $providerFilters = @($params.providerNames)
+}
+if ($providerFilters.Count -gt 0) {
+  $providerFilterPatterns = @()
+  foreach ($providerFilter in $providerFilters) {
+    $providerFilterText = [string]$providerFilter
+    if ($providerFilterText.Contains("*") -or $providerFilterText.Contains("?")) {
+      $providerFilterPatterns += $providerFilterText
+    } else {
+      $providerFilterPatterns += "*$providerFilterText*"
+    }
+  }
+  $providerFilterNames = @()
+  foreach ($providerFilterPattern in $providerFilterPatterns) {
+    try {
+      $matchedProviders = @(Get-WinEvent -ListProvider $providerFilterPattern -ErrorAction Stop)
+    } catch {
+      if ([string]$_.FullyQualifiedErrorId -like "*NoMatchingProvidersFound*" -or [string]$_.Exception.Message -like "*No event provider was found*") {
+        $matchedProviders = @()
+      } else {
+        throw
+      }
+    }
+
+    foreach ($matchedProvider in $matchedProviders) {
+      $matchedProviderName = [string]$matchedProvider.Name
+      if ($providerFilterNames -notcontains $matchedProviderName) {
+        $providerFilterNames += $matchedProviderName
+      }
+    }
+  }
+
+  if ($providerFilterNames.Count -gt 0) {
+    $filter.ProviderName = @($providerFilterNames)
+  } else {
+    "[]"
+    exit 0
+  }
+}
+$levels = @()
+if ($null -ne $params.levels) {
+  $levels = @($params.levels)
+}
+if ($levels.Count -gt 0) {
+  $filter.Level = @($levels)
+}
 try {
   $events = Get-WinEvent -FilterHashtable $filter -MaxEvents ([int]$params.fetchLimit) -ErrorAction Stop
 } catch {
@@ -179,14 +227,6 @@ try {
   } else {
     throw
   }
-}
-$providerFilters = @()
-if ($null -ne $params.providerNames) {
-  $providerFilters = @($params.providerNames)
-}
-$levels = @()
-if ($null -ne $params.levels) {
-  $levels = @($params.levels)
 }
 $contains = ""
 if ($null -ne $params.contains) {

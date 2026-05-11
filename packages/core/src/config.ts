@@ -11,7 +11,7 @@ export const DEFAULT_MAX_NOTIFICATIONS = 128 as const;
 export const DEFAULT_MAX_WAIT_UNTIL_MS = 600_000 as const;
 export const DEFAULT_RUNTIME_EVENT_LIMIT = 50 as const;
 export const DEFAULT_RUNTIME_LOG_LIMIT_BYTES = 65_536 as const;
-export const DEFAULT_DIAGNOSTIC_COMMAND_TIMEOUT_MS = 8_000 as const;
+export const DEFAULT_DIAGNOSTIC_COMMAND_TIMEOUT_MS = 15_000 as const;
 export const DEFAULT_TWINCAT_EVENT_LOG_NAME = "Application" as const;
 export const DEFAULT_TWINCAT_EVENT_PROVIDER_FILTERS = [
   "TwinCAT",

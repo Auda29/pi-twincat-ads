@@ -113,6 +113,9 @@ describe("RuntimeDiagnostics", () => {
     const command = decodePowerShellCommand(commands[0]!.args);
     const payload = readEmbeddedPayload(command);
     expect(payload.logName).toBe("Application");
+    expect(command).toContain("Get-WinEvent -ListProvider");
+    expect(command).toContain("$filter.ProviderName");
+    expect(command).toContain("$filter.Level");
     expect(commands[0]?.args.some((arg) => arg.includes('"logName"'))).toBe(
       false,
     );

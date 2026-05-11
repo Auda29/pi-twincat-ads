@@ -22,11 +22,13 @@ describe("core config contract", () => {
       id: "local-windows-application",
       kind: "windowsEventLog",
       logName: "Application",
+      commandTimeoutMs: 15000,
     });
     expect(config.diagnostics.logSources[0]).toMatchObject({
       id: "local-windows-application-log",
       kind: "windowsEventLog",
       logName: "Application",
+      commandTimeoutMs: 15000,
     });
     expect(config.readOnly).toBe(true);
   });
