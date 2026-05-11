@@ -2,6 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import { RuntimeDiagnostics } from "../src/diagnostics.js";
 
+function decodePowerShellCommand(args: readonly string[]): string {
+  const encodedCommandIndex = args.indexOf("-EncodedCommand");
+  expect(encodedCommandIndex).toBeGreaterThanOrEqual(0);
+  expect(args).toHaveLength(encodedCommandIndex + 2);
+
+  return Buffer.from(String(args[encodedCommandIndex + 1]), "base64").toString(
+    "utf16le",
+  );
+}
+
+function readEmbeddedPayload(command: string): Record<string, unknown> {
+  const match = command.match(/\$__twincatMcpPayload = '([^']+)'/);
+  expect(match?.[1]).toBeDefined();
+
+  return JSON.parse(Buffer.from(match![1], "base64").toString("utf8")) as Record<
+    string,
+    unknown
+  >;
+}
+
 describe("RuntimeDiagnostics", () => {
   it("reports default Windows event sources as unavailable off Windows", async () => {
     const diagnostics = new RuntimeDiagnostics(
@@ -90,6 +110,9 @@ describe("RuntimeDiagnostics", () => {
 
     expect(commands[0]?.command).toBe("pwsh.exe");
     expect(commands[0]?.args).toContain("-EncodedCommand");
+    const command = decodePowerShellCommand(commands[0]!.args);
+    const payload = readEmbeddedPayload(command);
+    expect(payload.logName).toBe("Application");
     expect(commands[0]?.args.some((arg) => arg.includes('"logName"'))).toBe(
       false,
     );
@@ -163,11 +186,7 @@ describe("RuntimeDiagnostics", () => {
         platform: "win32",
         commandRunner: {
           async run(_command, args) {
-            payload = JSON.parse(
-              Buffer.from(String(args[args.length - 1]), "base64").toString(
-                "utf8",
-              ),
-            ) as {
+            payload = readEmbeddedPayload(decodePowerShellCommand(args)) as {
               levels?: number[];
             };
             return {
